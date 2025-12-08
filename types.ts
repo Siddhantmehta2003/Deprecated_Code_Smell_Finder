@@ -16,10 +16,19 @@ export interface Issue {
   category: 'Security' | 'Deprecation' | 'Performance' | 'Standard';
 }
 
+export interface DependencyAudit {
+  packageName: string;
+  currentVersion: string;
+  latestVersion: string;
+  compatibilityStatus: 'Compatible' | 'Breaking Changes' | 'Unknown';
+  actionRequired: string;
+}
+
 export interface AnalysisReport {
   overallHealthScore: number; // 0 to 100
   summary: string;
   issues: Issue[];
+  dependencies?: DependencyAudit[];
   timestamp: string;
 }
 

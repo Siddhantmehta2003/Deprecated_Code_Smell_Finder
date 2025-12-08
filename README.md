@@ -1,42 +1,20 @@
-# DeprecCheck AI
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-An AI-powered tool to scan code for deprecation warnings and breaking changes.
+# Run and deploy your AI Studio app
 
-## Tech Stack
+This contains everything you need to run your app locally.
 
-- **Frontend**: React (TypeScript) + Tailwind CSS
-- **Backend**: Python FastAPI
-- **AI**: Google Gemini 2.5 Flash
+View your app in AI Studio: https://ai.studio/apps/drive/18xLDTalQ9iQHWpjPDavnMVeoyyyNK3Ue
 
-## Getting Started
+## Run Locally
 
-### 1. Frontend
-The frontend runs automatically in this environment. It is configured to look for the backend at `http://localhost:8000`. 
+**Prerequisites:**  Node.js
 
-If the backend is not running, the frontend will automatically fallback to using the Gemini API directly from the browser (Client-Side mode).
 
-### 2. Backend (Local Development)
-
-To run the Python backend on your local machine:
-
-1.  **Install Python 3.9+**
-2.  **Create a virtual environment:**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # Windows: venv\Scripts\activate
-    ```
-3.  **Install dependencies:**
-    ```bash
-    pip install -r backend/requirements.txt
-    ```
-4.  **Set up Environment Variables:**
-    Create a `.env` file in the root or `backend/` directory:
-    ```
-    API_KEY=your_google_gemini_api_key_here
-    ```
-5.  **Run the Server:**
-    ```bash
-    uvicorn backend.main:app --reload --port 8000
-    ```
-
-Once the server is running, the frontend will detect it and switch to server-side analysis.
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

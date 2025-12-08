@@ -1,7 +1,6 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AnalysisReport } from '../types';
 
-// --- Client-Side Configuration (Fallback) ---
 const getClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const reportSchema: Schema = {
@@ -30,7 +29,7 @@ const reportSchema: Schema = {
           replacementCode: { type: Type.STRING },
           estimatedEndOfLife: {
             type: Type.STRING,
-            description: "Estimated date (YYYY-MM-DD) when this feature will break or be unsupported. If unknown, estimate based on typical LTS cycles.",
+            description: "Estimated date (YYYY-MM-DD) when this feature will break. If unknown, estimate based on typical LTS cycles.",
           },
           category: {
             type: Type.STRING,
@@ -40,59 +39,37 @@ const reportSchema: Schema = {
         required: ["severity", "title", "description", "affectedCode", "replacementCode", "category", "estimatedEndOfLife"],
       },
     },
+    dependencies: {
+      type: Type.ARRAY,
+      description: "List of detected packages/libraries and their update status. Populate this if the input looks like a dependency file (package.json, requirements.txt) or has imports.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          packageName: { type: Type.STRING },
+          currentVersion: { type: Type.STRING },
+          latestVersion: { type: Type.STRING },
+          compatibilityStatus: { type: Type.STRING, enum: ['Compatible', 'Breaking Changes', 'Unknown'] },
+          actionRequired: { type: Type.STRING, description: "Short advice, e.g., 'Upgrade immediately' or 'Wait for v5'" }
+        },
+        required: ["packageName", "currentVersion", "latestVersion", "compatibilityStatus", "actionRequired"]
+      }
+    }
   },
   required: ["overallHealthScore", "summary", "issues"],
 };
 
-// --- Backend Configuration ---
-const BACKEND_URL = 'http://localhost:8000/analyze';
-
-/**
- * Analyses code using the Python backend if available, 
- * otherwise falls back to client-side Gemini API.
- */
 export const analyzeCode = async (code: string, context?: string): Promise<AnalysisReport> => {
-  const timestamp = new Date().toISOString();
-  
-  // 1. Try Backend
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout to detect if backend is down
-
-    const response = await fetch(BACKEND_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, context }),
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log("Analysis via Python Backend successful");
-      return enrichReport(data, timestamp);
-    }
-  } catch (err) {
-    console.warn("Backend unavailable, falling back to client-side API:", err);
-  }
-
-  // 2. Fallback to Client-Side
-  return analyzeCodeClientSide(code, context, timestamp);
-};
-
-const analyzeCodeClientSide = async (code: string, context: string | undefined, timestamp: string): Promise<AnalysisReport> => {
   const ai = getClient();
   
   const systemPrompt = `
-    You are a Senior Software Architect and Security Auditor specializing in Legacy Modernization.
-    Your task is to scan the provided code for:
+    You are a Senior Software Architect, Security Auditor, and Dependency Manager.
+    Your task is to scan the provided code (or dependency file like package.json/requirements.txt) for:
     1. Deprecated libraries, methods, or patterns.
     2. Upcoming deprecations (features warned to be removed in the next 6-12 months).
     3. Security vulnerabilities related to outdated dependencies.
-    4. "Code Smells" that indicate reliance on unmaintained tech.
+    4. Dependency Analysis: If the input is a dependency manifest, list packages that need upgrades and check for compatibility issues.
 
-    For every issue found, predict an "Estimated End of Life" date based on official roadmaps (e.g., React, Python, Node.js release schedules) or security advisory trends.
+    For every issue found, predict an "Estimated End of Life" date based on official roadmaps.
     Provide a modern migration path (replacement code).
     
     Context: ${context || 'General Web/Software Development'}
@@ -106,7 +83,7 @@ const analyzeCodeClientSide = async (code: string, context: string | undefined, 
         systemInstruction: systemPrompt,
         responseMimeType: "application/json",
         responseSchema: reportSchema,
-        temperature: 0.2, 
+        temperature: 0.2,
       },
     });
 
@@ -114,21 +91,39 @@ const analyzeCodeClientSide = async (code: string, context: string | undefined, 
     if (!text) throw new Error("No response from AI");
 
     const data = JSON.parse(text);
-    return enrichReport(data, timestamp);
+    
+    // Enrich with IDs and timestamp
+    return {
+      ...data,
+      timestamp: new Date().toISOString(),
+      issues: data.issues.map((issue: any, index: number) => ({
+        ...issue,
+        id: `issue-${index}-${Date.now()}`
+      }))
+    };
 
-  } catch (error) {
-    console.error("Client-side analysis failed:", error);
-    throw error;
+  } catch (error: any) {
+    console.error("Analysis failed:", error);
+    
+    // Enhanced Error Handling
+    let userMessage = "An unexpected error occurred during analysis.";
+    
+    // Check for specific GoogleGenAI error structures or HTTP status codes if available
+    const errorMsg = error.message || "";
+    const errorStatus = error.status || 0;
+
+    if (errorMsg.includes("API_KEY") || errorStatus === 401 || errorStatus === 403) {
+      userMessage = "Invalid API Key. Please ensure your environment is configured correctly.";
+    } else if (errorStatus === 429 || errorMsg.includes("quota") || errorMsg.includes("limit")) {
+      userMessage = "Rate limit exceeded. You are sending requests too quickly. Please wait a moment.";
+    } else if (errorStatus === 503 || errorMsg.includes("overloaded")) {
+      userMessage = "The AI service is currently overloaded. Please try again in a few minutes.";
+    } else if (errorMsg.includes("safety") || errorMsg.includes("blocked")) {
+      userMessage = "The model declined to generate a response due to safety policies. Please modify your input.";
+    } else if (errorMsg.includes("fetch failed")) {
+      userMessage = "Network error. Please check your internet connection.";
+    }
+
+    throw new Error(userMessage);
   }
-};
-
-const enrichReport = (data: any, timestamp: string): AnalysisReport => {
-  return {
-    ...data,
-    timestamp,
-    issues: data.issues.map((issue: any, index: number) => ({
-      ...issue,
-      id: `issue-${index}-${Date.now()}`
-    }))
-  };
 };
