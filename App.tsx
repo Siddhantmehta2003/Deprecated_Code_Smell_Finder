@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { analyzeCode } from './services/geminiService';
+import { scanGitRepo, scanLocalPath } from './services/backendService';
 import { AnalysisReport, Severity, Issue } from './types';
 import { Button } from './components/Button';
 import { CodeEditor, CodeEditorHandle } from './components/CodeEditor';
@@ -10,6 +11,7 @@ import { ApiDebugger } from './components/ApiDebugger';
 import { DiffViewer } from './components/DiffViewer';
 
 type Tab = 'scanner' | 'debugger';
+type InputMode = 'manual' | 'git' | 'local';
 
 // Define the state for the fix review mode
 interface FixReviewState {
@@ -22,7 +24,13 @@ interface FixReviewState {
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('scanner');
+  const [inputMode, setInputMode] = useState<InputMode>('manual');
+  
+  // Input states
   const [code, setCode] = useState<string>('');
+  const [repoUrl, setRepoUrl] = useState('');
+  const [localPath, setLocalPath] = useState('');
+  
   const [report, setReport] = useState<AnalysisReport | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +61,38 @@ const App: React.FC = () => {
       setError(err.message || "Failed to analyze code.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLoadRepo = async () => {
+    if (!repoUrl) return;
+    setLoading(true);
+    setError(null);
+    try {
+        const result = await scanGitRepo(repoUrl);
+        setCode(result.context);
+        setInputMode('manual'); // Switch to editor view to show loaded code
+        // Optional: Auto-analyze
+        // handleAnalyze(result.context); 
+    } catch (err: any) {
+        setError(err.message);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const handleLoadLocal = async () => {
+    if (!localPath) return;
+    setLoading(true);
+    setError(null);
+    try {
+        const result = await scanLocalPath(localPath);
+        setCode(result.context);
+        setInputMode('manual'); // Switch to editor view
+    } catch (err: any) {
+        setError(err.message);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -168,6 +208,7 @@ const App: React.FC = () => {
       setError(null);
       setPreviewIssue(null);
       setFixReview(null);
+      setInputMode('manual');
     };
     reader.readAsText(file);
   };
@@ -226,9 +267,81 @@ const App: React.FC = () => {
               </div>
 
               <div className="grid gap-6">
+                
+                {/* Input Mode Tabs */}
+                {!fixReview && (
+                    <div className="flex border-b border-slate-200 w-full mb-2">
+                        <button 
+                            onClick={() => setInputMode('manual')}
+                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${inputMode === 'manual' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Manual / Editor
+                        </button>
+                        <button 
+                            onClick={() => setInputMode('git')}
+                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${inputMode === 'git' ? 'border-violet-500 text-violet-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+                            Git Repository
+                        </button>
+                        <button 
+                            onClick={() => setInputMode('local')}
+                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${inputMode === 'local' ? 'border-blue-500 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            Local Path
+                        </button>
+                    </div>
+                )}
+
                 <div className="flex flex-col gap-2" id="main-editor">
                   
-                  {fixReview ? (
+                  {inputMode === 'git' && !fixReview ? (
+                      <div className="bg-white border border-slate-200 rounded-lg p-8 shadow-sm text-center space-y-4 animate-in fade-in zoom-in-95">
+                          <div className="mx-auto w-12 h-12 bg-violet-100 text-violet-600 rounded-full flex items-center justify-center">
+                              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+                          </div>
+                          <h3 className="text-lg font-bold text-slate-900">Scan Public Repository</h3>
+                          <p className="text-slate-500 text-sm max-w-md mx-auto">
+                              Enter a GitHub/GitLab URL. We will clone it to a secure sandbox, filter for source code and dependency files, and analyze it.
+                          </p>
+                          <div className="flex gap-2 max-w-lg mx-auto">
+                              <input 
+                                type="text" 
+                                placeholder="https://github.com/username/repo" 
+                                className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                value={repoUrl}
+                                onChange={(e) => setRepoUrl(e.target.value)}
+                              />
+                              <Button onClick={handleLoadRepo} isLoading={loading} className="bg-violet-600 hover:bg-violet-700">
+                                  Load Repo
+                              </Button>
+                          </div>
+                      </div>
+                  ) : inputMode === 'local' && !fixReview ? (
+                      <div className="bg-white border border-slate-200 rounded-lg p-8 shadow-sm text-center space-y-4 animate-in fade-in zoom-in-95">
+                          <div className="mx-auto w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                          </div>
+                          <h3 className="text-lg font-bold text-slate-900">Scan Local Path</h3>
+                          <p className="text-slate-500 text-sm max-w-md mx-auto">
+                              Enter the absolute path to your local project directory. <br/>
+                              <span className="text-xs text-amber-600 bg-amber-50 px-1 py-0.5 rounded mt-1 inline-block">Requires backend running locally</span>
+                          </p>
+                          <div className="flex gap-2 max-w-lg mx-auto">
+                              <input 
+                                type="text" 
+                                placeholder="/Users/dev/projects/my-app" 
+                                className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                value={localPath}
+                                onChange={(e) => setLocalPath(e.target.value)}
+                              />
+                              <Button onClick={handleLoadLocal} isLoading={loading} className="bg-blue-600 hover:bg-blue-700">
+                                  Load Files
+                              </Button>
+                          </div>
+                      </div>
+                  ) : fixReview ? (
                     /* Split View Comparison Mode */
                     <div className="animate-in fade-in duration-300">
                         <div className="flex justify-between items-center mb-2">
@@ -271,7 +384,10 @@ const App: React.FC = () => {
                         ref={editorRef}
                         value={code} 
                         onChange={setCode} 
-                        placeholder="// Paste your code, package.json, or requirements.txt here... \n// Example: \n// import { componentWillReceiveProps } from 'react';\n// var http = require('http');" 
+                        placeholder={inputMode === 'manual' 
+                          ? "// Paste your code, package.json, or requirements.txt here... \n// Example: \n// import { componentWillReceiveProps } from 'react';"
+                          : "// Content will appear here after loading repository..."
+                        }
                         className="h-80"
                     />
                   )}
@@ -286,6 +402,7 @@ const App: React.FC = () => {
                     />
                   )}
                   
+                  {/* Action Bar */}
                   <div className="flex justify-between items-center mt-2">
                     <div className="flex items-center gap-2">
                       <label htmlFor="file-upload" className="cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900 flex items-center gap-2 px-3 py-2 rounded-md hover:bg-slate-100 transition-colors border border-transparent hover:border-slate-200">
@@ -307,12 +424,21 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="flex gap-2">
-                        <Button variant="ghost" onClick={() => { setCode(''); setReport(null); setError(null); setPreviewIssue(null); setFixReview(null); }}>Clear</Button>
-                        {!fixReview && (
+                        <Button variant="ghost" onClick={() => { setCode(''); setReport(null); setError(null); setPreviewIssue(null); setFixReview(null); setInputMode('manual'); }}>Clear</Button>
+                        
+                        {!fixReview && inputMode === 'manual' && (
                             <Button onClick={() => handleAnalyze()} isLoading={loading} disabled={!code.trim()}>
                                 Analyze Code
                             </Button>
                         )}
+
+                        {/* If in Git/Local mode, show Analyze button only if code is loaded */}
+                        {!fixReview && (inputMode === 'git' || inputMode === 'local') && code.length > 0 && (
+                             <Button onClick={() => handleAnalyze()} isLoading={loading}>
+                                Analyze Loaded Repo
+                            </Button>
+                        )}
+                        
                         {fixReview && loading && (
                              <span className="flex items-center gap-2 text-sm text-slate-500">
                                  <svg className="animate-spin h-4 w-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -334,7 +460,7 @@ const App: React.FC = () => {
                       </svg>
                     </div>
                     <div>
-                      <h4 className="font-bold text-sm">Analysis Failed</h4>
+                      <h4 className="font-bold text-sm">Operation Failed</h4>
                       <p className="text-sm mt-1 opacity-90">{error}</p>
                     </div>
                   </div>
