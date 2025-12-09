@@ -136,7 +136,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, onApplyFix, onLocat
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <div className="flex justify-between items-center h-4">
+              <div className="flex justify-between items-center h-5">
                 <h4 className="text-xs font-semibold text-red-600 uppercase tracking-wider flex items-center gap-1">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div> Problematic Code
                 </h4>
@@ -146,12 +146,14 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, onApplyFix, onLocat
                       e.stopPropagation();
                       onLocate(issue);
                     }}
-                    className="text-[10px] bg-white border border-slate-200 text-slate-600 px-2 py-0.5 rounded shadow-sm hover:bg-slate-50 hover:text-slate-900 hover:border-blue-300 transition-all font-medium flex items-center gap-1 group"
+                    className="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 text-slate-600 text-[10px] font-bold uppercase rounded shadow-sm hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all active:translate-y-0.5"
+                    title="Scroll to code in editor"
                   >
-                    <svg className="w-3 h-3 text-slate-400 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
-                    Locate
+                    Locate in Editor
                   </button>
                 )}
               </div>
@@ -163,7 +165,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, onApplyFix, onLocat
             </div>
             
             <div className="space-y-2">
-              <div className="flex justify-between items-center h-4">
+              <div className="flex justify-between items-center h-5">
                  <h4 className={`text-xs font-semibold uppercase tracking-wider flex items-center gap-1 ${isPrediction ? 'text-violet-600' : 'text-green-600'}`}>
                     <div className={`w-1.5 h-1.5 rounded-full ${isPrediction ? 'bg-violet-500' : 'bg-green-500'}`}></div> 
                     {isPrediction ? 'Future-Proof Replacement' : 'Suggested Fix'}
@@ -183,7 +185,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, onApplyFix, onLocat
                     </button>
                  )}
               </div>
-              <pre className={`border rounded-md p-3 text-xs font-mono overflow-x-auto shadow-inner mt-2 ${isPrediction ? 'bg-violet-50 border-violet-200 text-violet-900' : 'bg-green-50 border-green-200 text-green-900'}`}>
+              <pre className={`border rounded-md p-3 text-xs font-mono overflow-x-auto shadow-inner ${isPrediction ? 'bg-violet-50 border-violet-200 text-violet-900' : 'bg-green-50 border-green-200 text-green-900'}`}>
                 <code>{issue.replacementCode}</code>
               </pre>
             </div>

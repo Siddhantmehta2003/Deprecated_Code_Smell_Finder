@@ -39,6 +39,10 @@ const App: React.FC = () => {
   // State for side-by-side fix review
   const [fixReview, setFixReview] = useState<FixReviewState | null>(null);
   
+  // State for temporary highlights (e.g., after Locate or Fix)
+  const [highlightedText, setHighlightedText] = useState<string | null>(null);
+  const [highlightColor, setHighlightColor] = useState<'red' | 'green'>('red');
+
   // Ref to control the editor programmatically
   const editorRef = useRef<CodeEditorHandle>(null);
 
@@ -53,6 +57,7 @@ const App: React.FC = () => {
     setLoading(true);
     setError(null);
     setPreviewIssue(null);
+    setHighlightedText(null);
     
     try {
       const result = await analyzeCode(textToAnalyze);
@@ -97,11 +102,19 @@ const App: React.FC = () => {
   };
 
   const handleLocateCode = (issue: Issue) => {
-    // Cannot locate if in review mode
+    // Cannot locate if in review mode (split screen)
     if (fixReview) return;
     
+    // 1. Show DiffViewer
     setPreviewIssue(issue);
+    
+    // 2. Highlight text in Editor (Red for 'problem')
+    setHighlightedText(issue.affectedCode);
+    setHighlightColor('red');
+    
+    // 3. Scroll to it
     editorRef.current?.highlight(issue.affectedCode);
+    
     const editorElement = document.getElementById('main-editor');
     if (editorElement) {
         editorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -113,6 +126,7 @@ const App: React.FC = () => {
     
     // Attempt robust find
     let match = affectedCode;
+    // Basic trimming check
     if (!code.includes(match) && code.includes(match.trim())) {
         match = match.trim();
     }
@@ -120,16 +134,21 @@ const App: React.FC = () => {
     if (code.includes(match)) {
       const newCode = code.replace(match, replacementCode);
       
-      // Enter Review Mode for Single Issue (In-Place)
-      setFixReview({
-        original: code,
-        modified: newCode,
-        originalHighlights: [match],
-        modifiedHighlights: [replacementCode],
-        isBulkFix: false
-      });
-      
+      // Update code
       setCode(newCode);
+      
+      // Hide the DiffViewer as it is now fixed
+      setPreviewIssue(null);
+      
+      // Set highlight to Green to show success on the NEW code
+      setHighlightedText(replacementCode);
+      setHighlightColor('green');
+      
+      // Use setTimeout to ensure the render cycle completes with new code before we try to highlight/scroll
+      setTimeout(() => {
+          editorRef.current?.highlight(replacementCode);
+      }, 50);
+
       // Auto analyze the new code
       handleAnalyze(newCode);
 
@@ -140,6 +159,7 @@ const App: React.FC = () => {
 
   const handleExitComparison = () => {
     setFixReview(null);
+    setHighlightedText(null);
   };
 
   const handleFixAll = () => {
@@ -208,6 +228,7 @@ const App: React.FC = () => {
       setError(null);
       setPreviewIssue(null);
       setFixReview(null);
+      setHighlightedText(null);
       setInputMode('manual');
     };
     reader.readAsText(file);
@@ -342,15 +363,15 @@ const App: React.FC = () => {
                           </div>
                       </div>
                   ) : fixReview ? (
-                    /* Split View Comparison Mode */
+                    /* Split View Comparison Mode (Bulk Fix) */
                     <div className="animate-in fade-in duration-300">
                         <div className="flex justify-between items-center mb-2">
                             <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
                                 <span className="flex items-center justify-center w-5 h-5 rounded-full bg-violet-100 text-violet-600 text-[10px]">⚡</span>
-                                Fixes Applied - Comparison Mode
+                                Bulk Fix Review
                             </h3>
                             <Button variant="secondary" onClick={handleExitComparison} className="text-xs h-8">
-                                Exit Comparison View
+                                Exit Review
                             </Button>
                         </div>
                         <div className="grid grid-cols-2 gap-4 h-96">
@@ -389,6 +410,8 @@ const App: React.FC = () => {
                           : "// Content will appear here after loading repository..."
                         }
                         className="h-80"
+                        highlights={highlightedText ? [highlightedText] : []}
+                        highlightColor={highlightColor}
                     />
                   )}
                   
@@ -424,7 +447,7 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="flex gap-2">
-                        <Button variant="ghost" onClick={() => { setCode(''); setReport(null); setError(null); setPreviewIssue(null); setFixReview(null); setInputMode('manual'); }}>Clear</Button>
+                        <Button variant="ghost" onClick={() => { setCode(''); setReport(null); setError(null); setPreviewIssue(null); setFixReview(null); setHighlightedText(null); setInputMode('manual'); }}>Clear</Button>
                         
                         {!fixReview && inputMode === 'manual' && (
                             <Button onClick={() => handleAnalyze()} isLoading={loading} disabled={!code.trim()}>

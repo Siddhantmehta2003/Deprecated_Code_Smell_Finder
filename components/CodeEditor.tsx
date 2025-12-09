@@ -6,7 +6,7 @@ interface CodeEditorProps {
   placeholder?: string;
   readOnly?: boolean;
   className?: string;
-  highlights?: string[]; // Changed from single highlight string to array
+  highlights?: string[]; // Array of strings to highlight
   highlightColor?: 'red' | 'green';
 }
 
@@ -29,20 +29,34 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
 
   useImperativeHandle(ref, () => ({
     highlight: (text: string) => {
-      if (!textareaRef.current || !text) return;
+      if (!textareaRef.current || !text || !value) return;
 
-      const index = value.indexOf(text);
+      // Normalize string for searching (simple trim for now)
+      const searchTarget = text.trim();
+      // Find the text in the current value. 
+      // We look for the exact substring first, then try trimming
+      let index = value.indexOf(text);
+      if (index === -1) {
+          index = value.indexOf(searchTarget);
+      }
+
       if (index >= 0) {
         const textarea = textareaRef.current;
         textarea.focus();
         textarea.setSelectionRange(index, index + text.length);
         
+        // Calculate scroll position
         const textBefore = value.substring(0, index);
         const lineCount = textBefore.split('\n').length;
         const lineHeight = 20; // Approx line height in px based on text-sm
         
-        const targetScroll = (lineCount - 1) * lineHeight - (textarea.clientHeight / 3);
-        textarea.scrollTop = Math.max(0, targetScroll);
+        // Center the line in the view
+        const targetScroll = (lineCount - 1) * lineHeight - (textarea.clientHeight / 2) + lineHeight;
+        
+        textarea.scrollTo({
+            top: Math.max(0, targetScroll),
+            behavior: 'smooth'
+        });
       }
     }
   }));
@@ -62,32 +76,48 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
     if (!highlights || highlights.length === 0 || !value) return value;
     
     const highlightClass = highlightColor === 'red' 
-        ? 'bg-red-500/30 text-red-100/20' 
-        : 'bg-green-500/30 text-green-100/20';
+        ? 'bg-red-500/30 text-transparent' 
+        : 'bg-green-500/30 text-transparent';
 
     // Find all occurrences of highlights
     const ranges: {start: number, end: number}[] = [];
     
-    // We iterate through highlights and find their position in the text.
-    // For simplicity in this view, we find the first occurrence of each unique highlight snippet.
-    // This matches the behavior of our simple search-and-replace logic.
     [...new Set(highlights)].forEach(h => {
         if (!h) return;
-        const index = value.indexOf(h);
-        if (index !== -1) {
-            ranges.push({ start: index, end: index + h.length });
+        // Simple global search for exact matches
+        // In a real app, we'd use more sophisticated token matching
+        let pos = 0;
+        const searchStr = h;
+        while (pos < value.length) {
+            const index = value.indexOf(searchStr, pos);
+            if (index === -1) break;
+            ranges.push({ start: index, end: index + searchStr.length });
+            pos = index + 1; // Don't skip whole length to find overlaps, though overlaps are rare here
         }
     });
 
     // Sort ranges by start position
     ranges.sort((a, b) => a.start - b.start);
 
+    // Merge overlapping ranges
+    const mergedRanges: {start: number, end: number}[] = [];
+    ranges.forEach(range => {
+        if (mergedRanges.length === 0) {
+            mergedRanges.push(range);
+        } else {
+            const prev = mergedRanges[mergedRanges.length - 1];
+            if (range.start < prev.end) {
+                prev.end = Math.max(prev.end, range.end);
+            } else {
+                mergedRanges.push(range);
+            }
+        }
+    });
+
     const elements: React.ReactNode[] = [];
     let lastIndex = 0;
 
-    ranges.forEach((range, i) => {
-        if (range.start < lastIndex) return; // Skip overlaps
-
+    mergedRanges.forEach((range, i) => {
         // Text before highlight
         if (range.start > lastIndex) {
             elements.push(value.substring(lastIndex, range.start));
@@ -95,7 +125,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
 
         // Highlighted text
         elements.push(
-            <span key={`${range.start}-${i}`} className={`${highlightClass} inline-block shadow-[0_0_0_2px_rgba(0,0,0,0)] rounded-sm`}>
+            <span key={`${range.start}-${i}`} className={`${highlightClass} inline-block rounded-sm`}>
                 {value.substring(range.start, range.end)}
             </span>
         );
@@ -118,7 +148,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
     <div className={`relative w-full border border-slate-200 rounded-lg overflow-hidden bg-slate-950 text-slate-50 transition-all flex flex-col ${readOnly ? 'opacity-100' : 'focus-within:ring-2 focus-within:ring-blue-500'} ${className}`}>
       {/* Header */}
       <div className="flex-none bg-slate-900 px-4 py-2 text-xs text-slate-400 border-b border-slate-800 flex justify-between items-center z-20">
-        <span>{readOnly ? (highlightColor === 'red' ? 'Original Source' : 'Updated Source') : 'Editor Input'}</span>
+        <span className="font-semibold text-slate-300">{readOnly ? (highlightColor === 'red' ? 'Original Source' : 'Updated Source') : 'Editor Input'}</span>
         <div className="flex items-center gap-2">
             <span className="font-mono opacity-50">{lineCount} lines</span>
             <span className={`px-2 py-0.5 rounded text-[10px] uppercase tracking-wider ${readOnly ? 'bg-slate-800 text-slate-300' : 'bg-blue-900/30 text-blue-200 border border-blue-900'}`}>
