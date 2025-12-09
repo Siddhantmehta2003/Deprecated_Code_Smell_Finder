@@ -45,8 +45,6 @@ const App: React.FC = () => {
     setLoading(true);
     setError(null);
     setPreviewIssue(null);
-    // Don't clear fixReview here if it was passed from confirm, 
-    // but usually handleAnalyze is called from main button or confirm fix.
     
     try {
       const result = await analyzeCode(textToAnalyze);
@@ -72,47 +70,42 @@ const App: React.FC = () => {
 
   const handleApplyFix = (issue: Issue) => {
     const { affectedCode, replacementCode } = issue;
-    if (code.includes(affectedCode)) {
-      const newCode = code.replace(affectedCode, replacementCode);
+    
+    // Attempt robust find
+    let match = affectedCode;
+    if (!code.includes(match) && code.includes(match.trim())) {
+        match = match.trim();
+    }
+
+    if (code.includes(match)) {
+      const newCode = code.replace(match, replacementCode);
       
-      // Enter Review Mode for Single Issue
+      // Enter Review Mode for Single Issue (In-Place)
       setFixReview({
         original: code,
         modified: newCode,
-        originalHighlights: [affectedCode],
+        originalHighlights: [match],
         modifiedHighlights: [replacementCode],
         isBulkFix: false
       });
-
-      // Scroll to editor to show the change
-      setTimeout(() => {
-        document.getElementById('main-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
       
-    } else {
-      alert("Could not automatically locate the exact code snippet. It may have already been changed.");
-    }
-  };
-
-  const handleConfirmFix = async () => {
-    if (fixReview) {
-      const newCode = fixReview.modified;
       setCode(newCode);
-      setFixReview(null);
-      setPreviewIssue(null);
-      
-      // Re-analyze the code after confirming changes
-      await handleAnalyze(newCode);
+      // Auto analyze the new code
+      handleAnalyze(newCode);
+
+    } else {
+      alert("Could not automatically locate the exact code snippet (formatting might differ). It may have already been changed.");
     }
   };
 
-  const handleCancelFix = () => {
+  const handleExitComparison = () => {
     setFixReview(null);
   };
 
   const handleFixAll = () => {
     if (!report || report.issues.length === 0) return;
 
+    const originalCode = code;
     let updatedCode = code;
     let appliedCount = 0;
     const originalHighlights: string[] = [];
@@ -122,31 +115,46 @@ const App: React.FC = () => {
     const sortedIssues = [...report.issues].sort((a, b) => b.affectedCode.length - a.affectedCode.length);
 
     sortedIssues.forEach(issue => {
-      // Very basic check to ensure we don't double replace if multiple issues target same code
-      if (updatedCode.includes(issue.affectedCode)) {
-        updatedCode = updatedCode.replace(issue.affectedCode, issue.replacementCode);
-        originalHighlights.push(issue.affectedCode);
+      let match = issue.affectedCode;
+      
+      // Robust matching: Try exact, then trimmed
+      if (!updatedCode.includes(match)) {
+         if (updatedCode.includes(match.trim())) {
+             match = match.trim();
+         } else {
+             // If still not found, skip
+             return; 
+         }
+      }
+
+      // Replace and track
+      if (updatedCode.includes(match)) {
+        updatedCode = updatedCode.replace(match, issue.replacementCode);
+        
+        // Track the ACTUAL string we replaced for correct highlighting
+        originalHighlights.push(match);
         modifiedHighlights.push(issue.replacementCode);
         appliedCount++;
       }
     });
 
     if (appliedCount === 0) {
-       alert("No applicable fixes found (code might have changed).");
+       alert("No applicable fixes found automatically (code might have changed or formatting differs). Please apply fixes manually.");
        return;
     }
 
-    // Enter Review Mode for Bulk Fix
+    // Set Split View State
     setFixReview({
-      original: code,
+      original: originalCode,
       modified: updatedCode,
       originalHighlights,
       modifiedHighlights,
       isBulkFix: true
     });
-    
-    // Scroll to top
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Update main code and trigger re-analysis immediately
+    setCode(updatedCode);
+    handleAnalyze(updatedCode);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -169,7 +177,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+      <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
         <div className="container mx-auto max-w-6xl px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold shadow-sm">D</div>
@@ -221,70 +229,50 @@ const App: React.FC = () => {
                 <div className="flex flex-col gap-2" id="main-editor">
                   
                   {fixReview ? (
-                    <div className="animate-in fade-in zoom-in-95 duration-300 space-y-4 border border-violet-200 rounded-xl p-5 bg-white shadow-lg shadow-violet-100/50 ring-4 ring-violet-50/50">
-                        {/* Header for Review Mode */}
-                        <div className="flex items-center justify-between border-b border-violet-100 pb-4">
-                            <div>
-                                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-violet-100 text-violet-600 text-xs">⚡</span>
-                                    {fixReview.isBulkFix ? 'Review All Changes' : 'Review Fix Application'}
-                                </h3>
-                                <p className="text-slate-500 text-sm mt-1">
-                                    Compare the <span className="font-semibold text-red-600">Original</span> code vs. <span className="font-semibold text-green-600">Updated</span> version.
-                                </p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                 <Button variant="ghost" onClick={handleCancelFix} className="border border-slate-200">Cancel</Button>
-                                 <Button variant="primary" onClick={handleConfirmFix} className="bg-violet-600 hover:bg-violet-700 shadow-md shadow-violet-200">
-                                   Confirm & Apply {fixReview.isBulkFix ? 'All' : ''} Fixes
-                                 </Button>
-                            </div>
+                    /* Split View Comparison Mode */
+                    <div className="animate-in fade-in duration-300">
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-violet-100 text-violet-600 text-[10px]">⚡</span>
+                                Fixes Applied - Comparison Mode
+                            </h3>
+                            <Button variant="secondary" onClick={handleExitComparison} className="text-xs h-8">
+                                Exit Comparison View
+                            </Button>
                         </div>
-
-                        {/* Two Editor Windows */}
-                        <div className="grid grid-cols-2 gap-4 h-[500px]">
-                            <div className="flex flex-col gap-2 h-full">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs font-bold text-red-600 uppercase tracking-wider bg-red-50 px-2 py-1 rounded border border-red-100 flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-red-500"></div> Original
-                                    </span>
-                                </div>
-                                <div className="flex-1 border-2 border-red-100 rounded-lg overflow-hidden ring-offset-2 focus-within:ring-2 ring-red-200/50 shadow-sm">
-                                   <CodeEditor 
-                                     value={fixReview.original} 
-                                     onChange={() => {}} 
-                                     readOnly={true} 
-                                     className="h-full border-none"
-                                     highlights={fixReview.originalHighlights}
-                                     highlightColor="red"
-                                   />
-                                </div>
+                        <div className="grid grid-cols-2 gap-4 h-96">
+                            {/* Left: Original */}
+                            <div className="flex flex-col rounded-lg overflow-hidden border border-red-200 shadow-sm bg-slate-950">
+                                <CodeEditor 
+                                    value={fixReview.original} 
+                                    onChange={() => {}} 
+                                    readOnly={true} 
+                                    className="h-full border-none"
+                                    highlights={fixReview.originalHighlights}
+                                    highlightColor="red"
+                                />
                             </div>
-                            <div className="flex flex-col gap-2 h-full">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-green-500"></div> After Fix
-                                    </span>
-                                </div>
-                                <div className="flex-1 border-2 border-green-100 rounded-lg overflow-hidden ring-offset-2 focus-within:ring-2 ring-green-200/50 shadow-sm">
-                                   <CodeEditor 
-                                     value={fixReview.modified} 
-                                     onChange={(val) => setFixReview({...fixReview, modified: val})} 
-                                     className="h-full border-none"
-                                     highlights={fixReview.modifiedHighlights}
-                                     highlightColor="green"
-                                   />
-                                </div>
+
+                            {/* Right: Modified (Current Code) */}
+                            <div className="flex flex-col rounded-lg overflow-hidden border border-green-200 shadow-sm bg-slate-950">
+                                <CodeEditor 
+                                    value={code} 
+                                    onChange={setCode} 
+                                    className="h-full border-none"
+                                    highlights={fixReview.modifiedHighlights}
+                                    highlightColor="green"
+                                />
                             </div>
                         </div>
                     </div>
                   ) : (
+                    /* Standard Single Editor Mode */
                     <CodeEditor 
-                      ref={editorRef}
-                      value={code} 
-                      onChange={setCode} 
-                      placeholder="// Paste your code, package.json, or requirements.txt here... \n// Example: \n// import { componentWillReceiveProps } from 'react';\n// var http = require('http');" 
-                      className="h-80"
+                        ref={editorRef}
+                        value={code} 
+                        onChange={setCode} 
+                        placeholder="// Paste your code, package.json, or requirements.txt here... \n// Example: \n// import { componentWillReceiveProps } from 'react';\n// var http = require('http');" 
+                        className="h-80"
                     />
                   )}
                   
@@ -320,9 +308,20 @@ const App: React.FC = () => {
 
                     <div className="flex gap-2">
                         <Button variant="ghost" onClick={() => { setCode(''); setReport(null); setError(null); setPreviewIssue(null); setFixReview(null); }}>Clear</Button>
-                        <Button onClick={() => handleAnalyze()} isLoading={loading} disabled={!code.trim() || !!fixReview}>
-                            {fixReview ? 'Finish Review First' : 'Analyze Code'}
-                        </Button>
+                        {!fixReview && (
+                            <Button onClick={() => handleAnalyze()} isLoading={loading} disabled={!code.trim()}>
+                                Analyze Code
+                            </Button>
+                        )}
+                        {fixReview && loading && (
+                             <span className="flex items-center gap-2 text-sm text-slate-500">
+                                 <svg className="animate-spin h-4 w-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                 </svg>
+                                 Re-analyzing...
+                             </span>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -349,7 +348,8 @@ const App: React.FC = () => {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                     <div className="flex items-center gap-4">
                         <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Analysis Report</h3>
-                        {report.issues.length > 0 && (
+                        {/* Only show Fix All if there are issues AND we are not already in review mode */}
+                        {report.issues.length > 0 && !fixReview && (
                            <button 
                              onClick={handleFixAll}
                              className="group relative inline-flex items-center justify-center gap-2 px-6 py-2.5 font-semibold text-white transition-all duration-300 bg-slate-900 rounded-full shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 overflow-hidden"
@@ -362,6 +362,14 @@ const App: React.FC = () => {
                                 Fix All Changes
                               </span>
                            </button>
+                        )}
+                        {fixReview && (
+                           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-100 text-green-700 text-sm font-semibold border border-green-200">
+                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                               </svg>
+                               Latest Fixes Applied
+                           </span>
                         )}
                     </div>
                     <div className="text-xs font-mono text-slate-400 bg-white border border-slate-200 px-2 py-1 rounded self-start md:self-auto">
