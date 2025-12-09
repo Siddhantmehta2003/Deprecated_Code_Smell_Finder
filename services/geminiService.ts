@@ -35,6 +35,19 @@ const reportSchema: Schema = {
             type: Type.STRING,
             enum: ["Security", "Deprecation", "Performance", "Standard"],
           },
+          isPrediction: {
+            type: Type.BOOLEAN,
+            description: "Set to true if this is a predicted future deprecation (not yet officially deprecated but shows signs).",
+          },
+          predictionConfidence: {
+            type: Type.NUMBER,
+            description: "Confidence score (0-100) for this prediction based on trends.",
+          },
+          riskFactors: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "List of reasons for prediction, e.g., 'Declining GitHub Activity', 'Roadmap Leak', 'Legacy Pattern'.",
+          },
         },
         required: ["severity", "title", "description", "affectedCode", "replacementCode", "category", "estimatedEndOfLife"],
       },
@@ -62,15 +75,22 @@ export const analyzeCode = async (code: string, context?: string): Promise<Analy
   const ai = getClient();
   
   const systemPrompt = `
-    You are a Senior Software Architect, Security Auditor, and Dependency Manager.
-    Your task is to scan the provided code (or dependency file like package.json/requirements.txt) for:
-    1. Deprecated libraries, methods, or patterns.
-    2. Upcoming deprecations (features warned to be removed in the next 6-12 months).
-    3. Security vulnerabilities related to outdated dependencies.
-    4. Dependency Analysis: If the input is a dependency manifest, list packages that need upgrades and check for compatibility issues.
+    You are 'DeprecCheck AI', a Senior Software Architect and Future-Tech predictor.
+    Your task is to scan the provided code (or dependency file) for CURRENT issues and FUTURE risks.
 
-    For every issue found, predict an "Estimated End of Life" date based on official roadmaps.
-    Provide a modern migration path (replacement code).
+    1. **Standard Deprecation**: Identify libraries/methods that are currently deprecated.
+    2. **Future-API Prediction Engine**: Predict which APIs will likely be deprecated in the next 6-12 months.
+       - Use your training data to simulate "GitHub commit trends" (e.g., libraries with slowing maintenance).
+       - Look for "Roadmap Leaks" (known upcoming breaking changes in major frameworks like React, Next.js, Python, etc.).
+       - Identify "Abandoned Maintainer Patterns" or "Security Issue Frequency".
+       - Flag legacy patterns (e.g., class components in new React apps, 'var' in JS) as "Stagnant".
+       - Mark these as 'isPrediction': true and provide a 'predictionConfidence' score (0-100).
+    3. **Security**: Vulnerabilities related to outdated dependencies.
+
+    For every issue, provide:
+    - Estimated End of Life (Date).
+    - Modern replacement code.
+    - Risk factors (e.g., "Declining Community", "Maintained by single dev", "Frequent CVEs").
     
     Context: ${context || 'General Web/Software Development'}
   `;
@@ -108,7 +128,6 @@ export const analyzeCode = async (code: string, context?: string): Promise<Analy
     // Enhanced Error Handling
     let userMessage = "An unexpected error occurred during analysis.";
     
-    // Check for specific GoogleGenAI error structures or HTTP status codes if available
     const errorMsg = error.message || "";
     const errorStatus = error.status || 0;
 

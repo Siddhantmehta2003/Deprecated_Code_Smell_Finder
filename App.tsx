@@ -11,6 +11,15 @@ import { DiffViewer } from './components/DiffViewer';
 
 type Tab = 'scanner' | 'debugger';
 
+// Define the state for the fix review mode
+interface FixReviewState {
+  original: string;
+  modified: string;
+  originalHighlights: string[];
+  modifiedHighlights: string[];
+  isBulkFix?: boolean;
+}
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('scanner');
   const [code, setCode] = useState<string>('');
@@ -19,11 +28,16 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [previewIssue, setPreviewIssue] = useState<Issue | null>(null);
   
+  // State for side-by-side fix review
+  const [fixReview, setFixReview] = useState<FixReviewState | null>(null);
+  
   // Ref to control the editor programmatically
   const editorRef = useRef<CodeEditorHandle>(null);
 
-  const handleAnalyze = async () => {
-    if (!code.trim()) {
+  const handleAnalyze = async (codeOverride?: string) => {
+    const textToAnalyze = codeOverride || code;
+    
+    if (!textToAnalyze.trim()) {
       setError("Please enter some code to analyze.");
       return;
     }
@@ -31,8 +45,11 @@ const App: React.FC = () => {
     setLoading(true);
     setError(null);
     setPreviewIssue(null);
+    // Don't clear fixReview here if it was passed from confirm, 
+    // but usually handleAnalyze is called from main button or confirm fix.
+    
     try {
-      const result = await analyzeCode(code);
+      const result = await analyzeCode(textToAnalyze);
       setReport(result);
     } catch (err: any) {
       setError(err.message || "Failed to analyze code.");
@@ -42,13 +59,11 @@ const App: React.FC = () => {
   };
 
   const handleLocateCode = (issue: Issue) => {
-    // 1. Set the issue to preview (shows the diff viewer)
+    // Cannot locate if in review mode
+    if (fixReview) return;
+    
     setPreviewIssue(issue);
-    
-    // 2. Highlight in main editor
     editorRef.current?.highlight(issue.affectedCode);
-    
-    // 3. Smooth scroll to editor to show context
     const editorElement = document.getElementById('main-editor');
     if (editorElement) {
         editorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -57,25 +72,81 @@ const App: React.FC = () => {
 
   const handleApplyFix = (issue: Issue) => {
     const { affectedCode, replacementCode } = issue;
-    
     if (code.includes(affectedCode)) {
-      // Apply the fix
-      setCode(prev => prev.replace(affectedCode, replacementCode));
+      const newCode = code.replace(affectedCode, replacementCode);
       
-      // Update preview to reflect this specific change logic if needed, 
-      // but usually we clear it or show the next one. 
-      // Let's keep the preview active but update it so the user sees the "After" state is now the "Current" state?
-      // Actually, standard behavior: Highlight the NEW code in the editor.
-      
+      // Enter Review Mode for Single Issue
+      setFixReview({
+        original: code,
+        modified: newCode,
+        originalHighlights: [affectedCode],
+        modifiedHighlights: [replacementCode],
+        isBulkFix: false
+      });
+
+      // Scroll to editor to show the change
       setTimeout(() => {
-        editorRef.current?.highlight(replacementCode);
-        // We can close the preview since the diff is now resolved in the code
-        setPreviewIssue(null); 
-      }, 50);
+        document.getElementById('main-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
       
     } else {
       alert("Could not automatically locate the exact code snippet. It may have already been changed.");
     }
+  };
+
+  const handleConfirmFix = async () => {
+    if (fixReview) {
+      const newCode = fixReview.modified;
+      setCode(newCode);
+      setFixReview(null);
+      setPreviewIssue(null);
+      
+      // Re-analyze the code after confirming changes
+      await handleAnalyze(newCode);
+    }
+  };
+
+  const handleCancelFix = () => {
+    setFixReview(null);
+  };
+
+  const handleFixAll = () => {
+    if (!report || report.issues.length === 0) return;
+
+    let updatedCode = code;
+    let appliedCount = 0;
+    const originalHighlights: string[] = [];
+    const modifiedHighlights: string[] = [];
+
+    // Sort issues by affectedCode length (descending) to avoid partial replacements of overlapping issues
+    const sortedIssues = [...report.issues].sort((a, b) => b.affectedCode.length - a.affectedCode.length);
+
+    sortedIssues.forEach(issue => {
+      // Very basic check to ensure we don't double replace if multiple issues target same code
+      if (updatedCode.includes(issue.affectedCode)) {
+        updatedCode = updatedCode.replace(issue.affectedCode, issue.replacementCode);
+        originalHighlights.push(issue.affectedCode);
+        modifiedHighlights.push(issue.replacementCode);
+        appliedCount++;
+      }
+    });
+
+    if (appliedCount === 0) {
+       alert("No applicable fixes found (code might have changed).");
+       return;
+    }
+
+    // Enter Review Mode for Bulk Fix
+    setFixReview({
+      original: code,
+      modified: updatedCode,
+      originalHighlights,
+      modifiedHighlights,
+      isBulkFix: true
+    });
+    
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -88,9 +159,12 @@ const App: React.FC = () => {
       setCode(text);
       setError(null);
       setPreviewIssue(null);
+      setFixReview(null);
     };
     reader.readAsText(file);
   };
+
+  const predictionCount = report?.issues.filter(i => i.isPrediction).length || 0;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
@@ -132,19 +206,90 @@ const App: React.FC = () => {
                 <p className="text-slate-600 text-lg">
                   Scan for deprecated libraries, breaking changes, and manage package upgrades efficiently.
                 </p>
+                <div className="mt-4 flex justify-center">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-100 text-violet-700 text-xs font-semibold border border-violet-200 shadow-sm">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
+                    </span>
+                    Future Prediction Engine Active
+                  </span>
+                </div>
               </div>
 
               <div className="grid gap-6">
                 <div className="flex flex-col gap-2" id="main-editor">
-                  <CodeEditor 
-                    ref={editorRef}
-                    value={code} 
-                    onChange={setCode} 
-                    placeholder="// Paste your code, package.json, or requirements.txt here..." 
-                  />
                   
-                  {/* GitHub Style Diff Viewer */}
-                  {previewIssue && (
+                  {fixReview ? (
+                    <div className="animate-in fade-in zoom-in-95 duration-300 space-y-4 border border-violet-200 rounded-xl p-5 bg-white shadow-lg shadow-violet-100/50 ring-4 ring-violet-50/50">
+                        {/* Header for Review Mode */}
+                        <div className="flex items-center justify-between border-b border-violet-100 pb-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-violet-100 text-violet-600 text-xs">⚡</span>
+                                    {fixReview.isBulkFix ? 'Review All Changes' : 'Review Fix Application'}
+                                </h3>
+                                <p className="text-slate-500 text-sm mt-1">
+                                    Compare the <span className="font-semibold text-red-600">Original</span> code vs. <span className="font-semibold text-green-600">Updated</span> version.
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                 <Button variant="ghost" onClick={handleCancelFix} className="border border-slate-200">Cancel</Button>
+                                 <Button variant="primary" onClick={handleConfirmFix} className="bg-violet-600 hover:bg-violet-700 shadow-md shadow-violet-200">
+                                   Confirm & Apply {fixReview.isBulkFix ? 'All' : ''} Fixes
+                                 </Button>
+                            </div>
+                        </div>
+
+                        {/* Two Editor Windows */}
+                        <div className="grid grid-cols-2 gap-4 h-[500px]">
+                            <div className="flex flex-col gap-2 h-full">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-bold text-red-600 uppercase tracking-wider bg-red-50 px-2 py-1 rounded border border-red-100 flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-red-500"></div> Original
+                                    </span>
+                                </div>
+                                <div className="flex-1 border-2 border-red-100 rounded-lg overflow-hidden ring-offset-2 focus-within:ring-2 ring-red-200/50 shadow-sm">
+                                   <CodeEditor 
+                                     value={fixReview.original} 
+                                     onChange={() => {}} 
+                                     readOnly={true} 
+                                     className="h-full border-none"
+                                     highlights={fixReview.originalHighlights}
+                                     highlightColor="red"
+                                   />
+                                </div>
+                            </div>
+                            <div className="flex flex-col gap-2 h-full">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-green-500"></div> After Fix
+                                    </span>
+                                </div>
+                                <div className="flex-1 border-2 border-green-100 rounded-lg overflow-hidden ring-offset-2 focus-within:ring-2 ring-green-200/50 shadow-sm">
+                                   <CodeEditor 
+                                     value={fixReview.modified} 
+                                     onChange={(val) => setFixReview({...fixReview, modified: val})} 
+                                     className="h-full border-none"
+                                     highlights={fixReview.modifiedHighlights}
+                                     highlightColor="green"
+                                   />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                  ) : (
+                    <CodeEditor 
+                      ref={editorRef}
+                      value={code} 
+                      onChange={setCode} 
+                      placeholder="// Paste your code, package.json, or requirements.txt here... \n// Example: \n// import { componentWillReceiveProps } from 'react';\n// var http = require('http');" 
+                      className="h-80"
+                    />
+                  )}
+                  
+                  {/* Show DiffViewer only if NOT in Review Mode */}
+                  {!fixReview && previewIssue && (
                     <DiffViewer 
                       isVisible={!!previewIssue}
                       oldCode={previewIssue.affectedCode}
@@ -174,9 +319,9 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="flex gap-2">
-                        <Button variant="ghost" onClick={() => { setCode(''); setReport(null); setError(null); setPreviewIssue(null); }}>Clear</Button>
-                        <Button onClick={handleAnalyze} isLoading={loading} disabled={!code.trim()}>
-                            Analyze Code
+                        <Button variant="ghost" onClick={() => { setCode(''); setReport(null); setError(null); setPreviewIssue(null); setFixReview(null); }}>Clear</Button>
+                        <Button onClick={() => handleAnalyze()} isLoading={loading} disabled={!code.trim() || !!fixReview}>
+                            {fixReview ? 'Finish Review First' : 'Analyze Code'}
                         </Button>
                     </div>
                   </div>
@@ -201,9 +346,25 @@ const App: React.FC = () => {
             {/* Results Dashboard */}
             {report && (
               <section className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Analysis Report</h3>
-                    <div className="text-xs font-mono text-slate-400 bg-white border border-slate-200 px-2 py-1 rounded">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div className="flex items-center gap-4">
+                        <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Analysis Report</h3>
+                        {report.issues.length > 0 && (
+                           <button 
+                             onClick={handleFixAll}
+                             className="group relative inline-flex items-center justify-center gap-2 px-6 py-2.5 font-semibold text-white transition-all duration-300 bg-slate-900 rounded-full shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 overflow-hidden"
+                           >
+                              <div className="absolute inset-0 transition-opacity duration-300 opacity-0 group-hover:opacity-100 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-indigo-600"></div>
+                              <span className="relative flex items-center gap-2">
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                </svg>
+                                Fix All Changes
+                              </span>
+                           </button>
+                        )}
+                    </div>
+                    <div className="text-xs font-mono text-slate-400 bg-white border border-slate-200 px-2 py-1 rounded self-start md:self-auto">
                         {new Date(report.timestamp).toLocaleString()}
                     </div>
                 </div>
@@ -230,7 +391,6 @@ const App: React.FC = () => {
                     </div>
                 </div>
                 
-                {/* Dependency Table */}
                 {report.dependencies && report.dependencies.length > 0 && (
                    <DependencyTable dependencies={report.dependencies} />
                 )}
@@ -244,7 +404,7 @@ const App: React.FC = () => {
                             <h4 className="text-sm font-bold text-slate-900 mb-4">Issues by Severity</h4>
                             <div className="space-y-3">
                                 {(['Critical', 'Warning', 'Info'] as Severity[]).map(sev => {
-                                    const count = report.issues.filter(i => i.severity === sev).length;
+                                    const count = report.issues.filter(i => i.severity === sev && !i.isPrediction).length;
                                     return (
                                         <div key={sev} className="flex items-center justify-between text-sm group">
                                             <div className="flex items-center gap-2">
@@ -258,30 +418,79 @@ const App: React.FC = () => {
                                         </div>
                                     );
                                 })}
+
+                                {/* Future Prediction Stat */}
+                                <div className="flex items-center justify-between text-sm group pt-2 mt-2 border-t border-slate-100">
+                                    <div className="flex items-center gap-2">
+                                        <span className="flex items-center justify-center w-4 h-4 text-xs rounded-full bg-violet-100 text-violet-600">🔮</span>
+                                        <span className="text-violet-700 font-semibold">Future Predictions</span>
+                                    </div>
+                                    <span className="font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded group-hover:bg-violet-100 transition-colors">{predictionCount}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     {/* Right Col: Issue List */}
-                    <div className="lg:col-span-2 space-y-4">
-                        <div className="flex justify-between items-end mb-2">
-                           <h4 className="text-lg font-bold text-slate-900">Detailed Findings</h4>
-                           <span className="text-xs text-slate-500">{report.issues.length} items found</span>
-                        </div>
+                    <div className="lg:col-span-2 space-y-8">
                         {report.issues.length === 0 ? (
-                            <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center text-green-800">
-                                <h4 className="font-bold text-lg mb-2">No Issues Found!</h4>
-                                <p>Your code appears to be free of major deprecation risks based on our current knowledge base.</p>
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center text-green-800 animate-in fade-in zoom-in-95">
+                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4 shadow-sm">
+                                   <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                   </svg>
+                                </div>
+                                <h4 className="font-bold text-xl mb-2 text-green-900">All Systems Go!</h4>
+                                <p className="text-green-700">Your code is fully optimized, secure, and free of known deprecation risks.</p>
                             </div>
                         ) : (
-                            report.issues.map(issue => (
-                                <IssueCard 
-                                  key={issue.id} 
-                                  issue={issue} 
-                                  onApplyFix={handleApplyFix}
-                                  onLocate={handleLocateCode}
-                                />
-                            ))
+                            <>
+                                {/* Future Predictions Section */}
+                                {report.issues.some(i => i.isPrediction) && (
+                                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
+                                        <div className="flex items-center gap-3 mb-4 p-4 bg-gradient-to-r from-violet-50 to-white border border-violet-100 rounded-lg shadow-sm">
+                                           <div className="p-2 bg-white rounded-md shadow-sm text-2xl">🔮</div>
+                                           <div>
+                                              <h4 className="font-bold text-violet-900 leading-tight">Future API Predictions</h4>
+                                              <p className="text-xs text-violet-700 opacity-80 mt-0.5">AI-forecasted deprecations (6-12 months) based on trends</p>
+                                           </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            {report.issues.filter(i => i.isPrediction).map(issue => (
+                                                <IssueCard 
+                                                  key={issue.id} 
+                                                  issue={issue} 
+                                                  onApplyFix={handleApplyFix}
+                                                  onLocate={handleLocateCode}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Standard Issues Section */}
+                                {report.issues.some(i => !i.isPrediction) && (
+                                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
+                                        <div className="flex items-center gap-3 mb-4 p-4 bg-slate-50 border border-slate-200 rounded-lg shadow-sm">
+                                           <div className="p-2 bg-white rounded-md shadow-sm text-2xl">⚠️</div>
+                                           <div>
+                                              <h4 className="font-bold text-slate-900 leading-tight">Detected Deprecations</h4>
+                                              <p className="text-xs text-slate-600 opacity-80 mt-0.5">Immediate fixes required for code health</p>
+                                           </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            {report.issues.filter(i => !i.isPrediction).map(issue => (
+                                                <IssueCard 
+                                                  key={issue.id} 
+                                                  issue={issue} 
+                                                  onApplyFix={handleApplyFix}
+                                                  onLocate={handleLocateCode}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>

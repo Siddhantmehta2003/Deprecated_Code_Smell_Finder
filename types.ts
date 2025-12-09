@@ -14,6 +14,11 @@ export interface Issue {
   estimatedEndOfLife: string; // ISO Date String or "Unknown"
   documentationUrl?: string;
   category: 'Security' | 'Deprecation' | 'Performance' | 'Standard';
+  
+  // Future Prediction Engine Fields
+  isPrediction?: boolean;
+  predictionConfidence?: number; // 0 to 100
+  riskFactors?: string[];
 }
 
 export interface DependencyAudit {
