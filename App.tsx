@@ -160,13 +160,45 @@ const App: React.FC = () => {
   const handleExitComparison = () => {
     setFixReview(null);
     setHighlightedText(null);
+    // Clear any active report if we want to reset state, 
+    // but typically we keep the last analysis (which should be high score).
+  };
+
+  // Helper to replace code with loose matching
+  const robustReplace = (fullText: string, search: string, replace: string): string | null => {
+    // 1. Try exact match
+    if (fullText.includes(search)) {
+      return fullText.replace(search, replace);
+    }
+    
+    // 2. Try trimmed match
+    const trimmedSearch = search.trim();
+    if (fullText.includes(trimmedSearch)) {
+      return fullText.replace(trimmedSearch, replace);
+    }
+
+    // 3. Try newline normalization match (CRLF vs LF)
+    const normalizedText = fullText.replace(/\r\n/g, '\n');
+    const normalizedSearch = search.replace(/\r\n/g, '\n');
+    
+    if (normalizedText.includes(normalizedSearch)) {
+        // This is tricky because we need to return the replaced text while preserving the original structure 
+        // where possible. For simplicity in this tool, we proceed with normalized text.
+        return normalizedText.replace(normalizedSearch, replace);
+    }
+
+    return null;
   };
 
   const handleFixAll = () => {
     if (!report || report.issues.length === 0) return;
 
+    // Snapshot original code for the LEFT editor
     const originalCode = code;
+    
+    // Start modifying this copy for the RIGHT editor
     let updatedCode = code;
+    
     let appliedCount = 0;
     const originalHighlights: string[] = [];
     const modifiedHighlights: string[] = [];
@@ -175,31 +207,24 @@ const App: React.FC = () => {
     const sortedIssues = [...report.issues].sort((a, b) => b.affectedCode.length - a.affectedCode.length);
 
     sortedIssues.forEach(issue => {
-      let match = issue.affectedCode;
-      
-      // Robust matching: Try exact, then trimmed
-      if (!updatedCode.includes(match)) {
-         if (updatedCode.includes(match.trim())) {
-             match = match.trim();
-         } else {
-             // If still not found, skip
-             return; 
-         }
-      }
+      // Try to replace
+      const newCode = robustReplace(updatedCode, issue.affectedCode, issue.replacementCode);
 
-      // Replace and track
-      if (updatedCode.includes(match)) {
-        updatedCode = updatedCode.replace(match, issue.replacementCode);
+      if (newCode && newCode !== updatedCode) {
+        updatedCode = newCode;
         
-        // Track the ACTUAL string we replaced for correct highlighting
-        originalHighlights.push(match);
-        modifiedHighlights.push(issue.replacementCode);
+        // Track visual highlights
+        // We highlight the 'affectedCode' as it appears in the ORIGINAL
+        // and 'replacementCode' as it appears in the NEW
+        originalHighlights.push(issue.affectedCode.trim());
+        modifiedHighlights.push(issue.replacementCode.trim());
+        
         appliedCount++;
       }
     });
 
     if (appliedCount === 0) {
-       alert("No applicable fixes found automatically (code might have changed or formatting differs). Please apply fixes manually.");
+       alert("No applicable fixes found automatically (code might have changed or formatting differs too much). Please apply fixes manually.");
        return;
     }
 
@@ -212,8 +237,12 @@ const App: React.FC = () => {
       isBulkFix: true
     });
 
-    // Update main code and trigger re-analysis immediately
+    // Update main code
     setCode(updatedCode);
+    
+    // Force Re-analysis on the NEW code
+    // We clear the report first to give visual feedback that something is happening
+    setReport(null); 
     handleAnalyze(updatedCode);
   };
 
@@ -370,9 +399,12 @@ const App: React.FC = () => {
                                 <span className="flex items-center justify-center w-5 h-5 rounded-full bg-violet-100 text-violet-600 text-[10px]">⚡</span>
                                 Bulk Fix Review
                             </h3>
-                            <Button variant="secondary" onClick={handleExitComparison} className="text-xs h-8">
-                                Exit Review
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              {loading && <span className="text-xs text-slate-500 animate-pulse">Analyzing improvements...</span>}
+                              <Button variant="secondary" onClick={handleExitComparison} className="text-xs h-8">
+                                  Exit Review
+                              </Button>
+                            </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4 h-96">
                             {/* Left: Original */}

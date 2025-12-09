@@ -8,7 +8,7 @@ const reportSchema: Schema = {
   properties: {
     overallHealthScore: {
       type: Type.NUMBER,
-      description: "A score from 0 to 100, where 100 is perfect code health.",
+      description: "A score from 0 to 100. Start at 100 and strictly deduct points for every issue found.",
     },
     summary: {
       type: Type.STRING,
@@ -78,6 +78,14 @@ export const analyzeCode = async (code: string, context?: string): Promise<Analy
     You are 'DeprecCheck AI', a Senior Software Architect and Future-Tech predictor.
     Your task is to scan the provided code (or dependency file) for CURRENT issues and FUTURE risks.
 
+    SCORING RULES (STRICT):
+    - Start with a perfect score of 100.
+    - Deduct 15 points for every "Critical" issue.
+    - Deduct 5 points for every "Warning" issue.
+    - Deduct 2 points for every "Info" or "Prediction" issue.
+    - The score cannot go below 0.
+    - IF NO ISSUES ARE FOUND, THE SCORE MUST BE 100.
+
     1. **Standard Deprecation**: Identify libraries/methods that are currently deprecated.
     2. **Future-API Prediction Engine**: Predict which APIs will likely be deprecated in the next 6-12 months.
        - Use your training data to simulate "GitHub commit trends" (e.g., libraries with slowing maintenance).
@@ -103,7 +111,7 @@ export const analyzeCode = async (code: string, context?: string): Promise<Analy
         systemInstruction: systemPrompt,
         responseMimeType: "application/json",
         responseSchema: reportSchema,
-        temperature: 0.2,
+        temperature: 0.1, // Lower temperature for more deterministic scoring
       },
     });
 
