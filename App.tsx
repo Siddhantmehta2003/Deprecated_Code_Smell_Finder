@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { analyzeCode } from './services/geminiService';
 import { scanGitRepo, scanLocalPath } from './services/backendService';
 import { AnalysisReport, Severity, Issue } from './types';
@@ -42,9 +42,21 @@ const App: React.FC = () => {
   // State for temporary highlights (e.g., after Locate or Fix)
   const [highlightedText, setHighlightedText] = useState<string | null>(null);
   const [highlightColor, setHighlightColor] = useState<'red' | 'green'>('red');
+  
+  // State for Dependency Dropdown in Navbar
+  const [showDeps, setShowDeps] = useState(false);
 
   // Ref to control the editor programmatically
   const editorRef = useRef<CodeEditorHandle>(null);
+
+  // Calculate Dependency Stats for Navbar
+  const depStats = useMemo(() => {
+    if (!report?.dependencies || report.dependencies.length === 0) return null;
+    const total = report.dependencies.length;
+    const breaking = report.dependencies.filter(d => d.compatibilityStatus === 'Breaking Changes').length;
+    const compatible = report.dependencies.filter(d => d.compatibilityStatus === 'Compatible').length;
+    return { total, breaking, compatible };
+  }, [report]);
 
   const handleAnalyze = async (codeOverride?: string) => {
     const textToAnalyze = codeOverride || code;
@@ -160,45 +172,13 @@ const App: React.FC = () => {
   const handleExitComparison = () => {
     setFixReview(null);
     setHighlightedText(null);
-    // Clear any active report if we want to reset state, 
-    // but typically we keep the last analysis (which should be high score).
-  };
-
-  // Helper to replace code with loose matching
-  const robustReplace = (fullText: string, search: string, replace: string): string | null => {
-    // 1. Try exact match
-    if (fullText.includes(search)) {
-      return fullText.replace(search, replace);
-    }
-    
-    // 2. Try trimmed match
-    const trimmedSearch = search.trim();
-    if (fullText.includes(trimmedSearch)) {
-      return fullText.replace(trimmedSearch, replace);
-    }
-
-    // 3. Try newline normalization match (CRLF vs LF)
-    const normalizedText = fullText.replace(/\r\n/g, '\n');
-    const normalizedSearch = search.replace(/\r\n/g, '\n');
-    
-    if (normalizedText.includes(normalizedSearch)) {
-        // This is tricky because we need to return the replaced text while preserving the original structure 
-        // where possible. For simplicity in this tool, we proceed with normalized text.
-        return normalizedText.replace(normalizedSearch, replace);
-    }
-
-    return null;
   };
 
   const handleFixAll = () => {
     if (!report || report.issues.length === 0) return;
 
-    // Snapshot original code for the LEFT editor
     const originalCode = code;
-    
-    // Start modifying this copy for the RIGHT editor
     let updatedCode = code;
-    
     let appliedCount = 0;
     const originalHighlights: string[] = [];
     const modifiedHighlights: string[] = [];
@@ -207,24 +187,31 @@ const App: React.FC = () => {
     const sortedIssues = [...report.issues].sort((a, b) => b.affectedCode.length - a.affectedCode.length);
 
     sortedIssues.forEach(issue => {
-      // Try to replace
-      const newCode = robustReplace(updatedCode, issue.affectedCode, issue.replacementCode);
+      let match = issue.affectedCode;
+      
+      // Robust matching: Try exact, then trimmed
+      if (!updatedCode.includes(match)) {
+         if (updatedCode.includes(match.trim())) {
+             match = match.trim();
+         } else {
+             // If still not found, skip
+             return; 
+         }
+      }
 
-      if (newCode && newCode !== updatedCode) {
-        updatedCode = newCode;
+      // Replace and track
+      if (updatedCode.includes(match)) {
+        updatedCode = updatedCode.replace(match, issue.replacementCode);
         
-        // Track visual highlights
-        // We highlight the 'affectedCode' as it appears in the ORIGINAL
-        // and 'replacementCode' as it appears in the NEW
-        originalHighlights.push(issue.affectedCode.trim());
-        modifiedHighlights.push(issue.replacementCode.trim());
-        
+        // Track the ACTUAL string we replaced for correct highlighting
+        originalHighlights.push(match);
+        modifiedHighlights.push(issue.replacementCode);
         appliedCount++;
       }
     });
 
     if (appliedCount === 0) {
-       alert("No applicable fixes found automatically (code might have changed or formatting differs too much). Please apply fixes manually.");
+       alert("No applicable fixes found automatically (code might have changed or formatting differs). Please apply fixes manually.");
        return;
     }
 
@@ -237,12 +224,8 @@ const App: React.FC = () => {
       isBulkFix: true
     });
 
-    // Update main code
+    // Update main code and trigger re-analysis immediately
     setCode(updatedCode);
-    
-    // Force Re-analysis on the NEW code
-    // We clear the report first to give visual feedback that something is happening
-    setReport(null); 
     handleAnalyze(updatedCode);
   };
 
@@ -275,20 +258,81 @@ const App: React.FC = () => {
             <h1 className="font-bold text-xl tracking-tight text-slate-900">DeprecCheck AI</h1>
           </div>
           
-          <nav className="flex gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
-             <button 
-               onClick={() => setActiveTab('scanner')}
-               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'scanner' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
-             >
-               Code Scanner
-             </button>
-             <button 
-               onClick={() => setActiveTab('debugger')}
-               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'debugger' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
-             >
-               API Debugger
-             </button>
-          </nav>
+          <div className="flex items-center gap-4">
+            {/* Dependency Status Widget (In Navbar) */}
+            {depStats && (
+                <div className="relative">
+                    <button 
+                       onClick={() => setShowDeps(!showDeps)}
+                       className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                           depStats.breaking > 0 
+                           ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' 
+                           : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                       }`}
+                       title="Click to view dependency details"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                        <span>{depStats.breaking > 0 ? `${depStats.breaking} Breaking Changes` : 'Libraries Compatible'}</span>
+                        <span className="bg-white px-1.5 py-0.5 rounded-full border border-current opacity-60 text-[10px]">{depStats.total}</span>
+                    </button>
+
+                    {showDeps && (
+                        <>
+                          <div className="fixed inset-0 z-40 cursor-default" onClick={() => setShowDeps(false)}></div>
+                          <div className="absolute top-full right-0 mt-2 w-96 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 origin-top-right z-50">
+                              <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                                  <h4 className="font-bold text-slate-800 text-sm">Dependency Audit</h4>
+                                  <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                                    Live Status
+                                  </span>
+                              </div>
+                              <div className="max-h-[350px] overflow-y-auto">
+                                  {report?.dependencies?.map((dep, i) => (
+                                      <div key={i} className="p-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                                          <div className="flex justify-between mb-1">
+                                              <span className="font-semibold text-slate-900 text-sm">{dep.packageName}</span>
+                                              <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                                  dep.compatibilityStatus === 'Compatible' ? 'bg-green-100 text-green-700 border-green-200' :
+                                                  dep.compatibilityStatus === 'Breaking Changes' ? 'bg-red-100 text-red-700 border-red-200' :
+                                                  'bg-amber-100 text-amber-700 border-amber-200'
+                                              }`}>
+                                                  {dep.compatibilityStatus}
+                                              </span>
+                                          </div>
+                                          <div className="flex justify-between text-xs text-slate-500 font-mono">
+                                              <span>v{dep.currentVersion} → v{dep.latestVersion}</span>
+                                          </div>
+                                          {dep.actionRequired && (
+                                              <p className="text-[10px] text-slate-600 mt-1 italic">"{dep.actionRequired}"</p>
+                                          )}
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                        </>
+                    )}
+                </div>
+            )}
+
+            {/* Nav Tabs */}
+            <nav className="flex gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+               <button 
+                 onClick={() => setActiveTab('scanner')}
+                 className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'scanner' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+               >
+                 Code Scanner
+               </button>
+               <button 
+                 onClick={() => setActiveTab('debugger')}
+                 className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'debugger' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+               >
+                 API Debugger
+               </button>
+            </nav>
+          </div>
         </div>
       </header>
 
@@ -399,12 +443,9 @@ const App: React.FC = () => {
                                 <span className="flex items-center justify-center w-5 h-5 rounded-full bg-violet-100 text-violet-600 text-[10px]">⚡</span>
                                 Bulk Fix Review
                             </h3>
-                            <div className="flex items-center gap-2">
-                              {loading && <span className="text-xs text-slate-500 animate-pulse">Analyzing improvements...</span>}
-                              <Button variant="secondary" onClick={handleExitComparison} className="text-xs h-8">
-                                  Exit Review
-                              </Button>
-                            </div>
+                            <Button variant="secondary" onClick={handleExitComparison} className="text-xs h-8">
+                                Exit Review
+                            </Button>
                         </div>
                         <div className="grid grid-cols-2 gap-4 h-96">
                             {/* Left: Original */}
