@@ -41,3 +41,5 @@ export interface ChartDataPoint {
   date: string;
   count: number;
 }
+
+export type PrStatus = 'idle' | 'checking' | 'blocked' | 'passed';

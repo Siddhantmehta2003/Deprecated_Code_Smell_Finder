@@ -8,11 +8,11 @@ const reportSchema: Schema = {
   properties: {
     overallHealthScore: {
       type: Type.NUMBER,
-      description: "A score from 0 to 100, where 100 is perfect code health.",
+      description: "A score from 0 to 100. START at 100. Deduct 10 points for each Critical issue, 5 for Warning, 2 for Info. If NO issues are found, the score MUST be 100.",
     },
     summary: {
       type: Type.STRING,
-      description: "A brief executive summary of the codebase status.",
+      description: "A brief executive summary of the codebase status. If score is 100, congratulate the user.",
     },
     issues: {
       type: Type.ARRAY,
@@ -77,6 +77,14 @@ export const analyzeCode = async (code: string, context?: string): Promise<Analy
   const systemPrompt = `
     You are 'DeprecCheck AI', a Senior Software Architect and Future-Tech predictor.
     Your task is to scan the provided code (or dependency file) for CURRENT issues and FUTURE risks.
+
+    SCORING RULES:
+    - Start with a Health Score of 100.
+    - If you find NO issues, the score MUST remain 100.
+    - Deduct 15 points for each CRITICAL issue.
+    - Deduct 5 points for each WARNING.
+    - Deduct 2 points for each INFO/PREDICTION.
+    - If the code provided looks like it has already been fixed (e.g. uses modern APIs), DO NOT flag old issues.
 
     1. **Standard Deprecation**: Identify libraries/methods that are currently deprecated.
     2. **Future-API Prediction Engine**: Predict which APIs will likely be deprecated in the next 6-12 months.

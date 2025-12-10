@@ -148,7 +148,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
     <div className={`relative w-full border border-slate-200 rounded-lg overflow-hidden bg-slate-950 text-slate-50 transition-all flex flex-col ${readOnly ? 'opacity-100' : 'focus-within:ring-2 focus-within:ring-blue-500'} ${className}`}>
       {/* Header */}
       <div className="flex-none bg-slate-900 px-4 py-2 text-xs text-slate-400 border-b border-slate-800 flex justify-between items-center z-20">
-        <span className="font-semibold text-slate-300">{readOnly ? (highlightColor === 'red' ? 'Original Source' : 'Updated Source') : 'Editor Input'}</span>
+        <span className="font-semibold text-slate-300">{readOnly ? (highlightColor === 'red' ? 'Original / Deprecated' : 'New / Migrated') : 'Code Editor'}</span>
         <div className="flex items-center gap-2">
             <span className="font-mono opacity-50">{lineCount} lines</span>
             <span className={`px-2 py-0.5 rounded text-[10px] uppercase tracking-wider ${readOnly ? 'bg-slate-800 text-slate-300' : 'bg-blue-900/30 text-blue-200 border border-blue-900'}`}>

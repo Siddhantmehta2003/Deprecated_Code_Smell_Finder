@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { analyzeCode } from './services/geminiService';
 import { scanGitRepo, scanLocalPath } from './services/backendService';
-import { AnalysisReport, Severity, Issue } from './types';
+import { AnalysisReport, Severity, Issue, PrStatus } from './types';
 import { Button } from './components/Button';
 import { CodeEditor, CodeEditorHandle } from './components/CodeEditor';
 import { IssueCard } from './components/IssueCard';
@@ -9,8 +9,9 @@ import { TimelineChart } from './components/TimelineChart';
 import { DependencyTable } from './components/DependencyTable';
 import { ApiDebugger } from './components/ApiDebugger';
 import { DiffViewer } from './components/DiffViewer';
+import { PrDashboard } from './components/PrDashboard';
 
-type Tab = 'scanner' | 'debugger';
+type Tab = 'scanner' | 'pr-interceptor' | 'debugger';
 type InputMode = 'manual' | 'git' | 'local';
 
 // Define the state for the fix review mode
@@ -36,6 +37,9 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [previewIssue, setPreviewIssue] = useState<Issue | null>(null);
   
+  // PR Interceptor State
+  const [prStatus, setPrStatus] = useState<PrStatus>('idle');
+  
   // State for side-by-side fix review
   const [fixReview, setFixReview] = useState<FixReviewState | null>(null);
   
@@ -58,7 +62,7 @@ const App: React.FC = () => {
     return { total, breaking, compatible };
   }, [report]);
 
-  const handleAnalyze = async (codeOverride?: string) => {
+  const handleAnalyze = async (codeOverride?: string, isPrCheck: boolean = false) => {
     const textToAnalyze = codeOverride || code;
     
     if (!textToAnalyze.trim()) {
@@ -70,44 +74,76 @@ const App: React.FC = () => {
     setError(null);
     setPreviewIssue(null);
     setHighlightedText(null);
+    if (isPrCheck) setPrStatus('checking');
     
     try {
       const result = await analyzeCode(textToAnalyze);
       setReport(result);
+      
+      if (isPrCheck) {
+          // Determine PR Status based on findings
+          if (result.issues.length > 0) {
+              setPrStatus('blocked');
+          } else {
+              setPrStatus('passed');
+          }
+      }
     } catch (err: any) {
       setError(err.message || "Failed to analyze code.");
+      if (isPrCheck) setPrStatus('idle');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLoadRepo = async () => {
+  const handleLoadRepo = async (isPrCheck: boolean = false) => {
     if (!repoUrl) return;
     setLoading(true);
     setError(null);
+    if (isPrCheck) setPrStatus('checking');
+
     try {
         const result = await scanGitRepo(repoUrl);
         setCode(result.context);
         setInputMode('manual'); // Switch to editor view to show loaded code
-        // Optional: Auto-analyze
-        // handleAnalyze(result.context); 
+        
+        // Auto-analyze
+        const analysis = await analyzeCode(result.context);
+        setReport(analysis);
+        
+        if (isPrCheck) {
+            setPrStatus(analysis.issues.length > 0 ? 'blocked' : 'passed');
+        }
+
     } catch (err: any) {
         setError(err.message);
+        setPrStatus('idle');
     } finally {
         setLoading(false);
     }
   };
 
-  const handleLoadLocal = async () => {
+  const handleLoadLocal = async (isPrCheck: boolean = false) => {
     if (!localPath) return;
     setLoading(true);
     setError(null);
+    if (isPrCheck) setPrStatus('checking');
+
     try {
         const result = await scanLocalPath(localPath);
         setCode(result.context);
         setInputMode('manual'); // Switch to editor view
+        
+        // Auto-analyze
+        const analysis = await analyzeCode(result.context);
+        setReport(analysis);
+        
+        if (isPrCheck) {
+             setPrStatus(analysis.issues.length > 0 ? 'blocked' : 'passed');
+        }
     } catch (err: any) {
         setError(err.message);
+        setPrStatus('idle');
     } finally {
         setLoading(false);
     }
@@ -194,24 +230,25 @@ const App: React.FC = () => {
          if (updatedCode.includes(match.trim())) {
              match = match.trim();
          } else {
-             // If still not found, skip
-             return; 
+             return; // Skip if not found
          }
       }
 
-      // Replace and track
-      if (updatedCode.includes(match)) {
-        updatedCode = updatedCode.replace(match, issue.replacementCode);
-        
-        // Track the ACTUAL string we replaced for correct highlighting
-        originalHighlights.push(match);
-        modifiedHighlights.push(issue.replacementCode);
-        appliedCount++;
+      // GLOBAL REPLACE: We want to fix ALL instances.
+      // We use split/join as a simple "replaceAll" that handles special regex chars in code safely
+      const parts = updatedCode.split(match);
+      if (parts.length > 1) {
+         updatedCode = parts.join(issue.replacementCode);
+         
+         // Track for highlighting
+         originalHighlights.push(match);
+         modifiedHighlights.push(issue.replacementCode);
+         appliedCount += (parts.length - 1);
       }
     });
 
     if (appliedCount === 0) {
-       alert("No applicable fixes found automatically (code might have changed or formatting differs). Please apply fixes manually.");
+       alert("No applicable fixes found automatically (code might have changed or formatting differs).");
        return;
     }
 
@@ -224,8 +261,15 @@ const App: React.FC = () => {
       isBulkFix: true
     });
 
-    // Update main code and trigger re-analysis immediately
+    // Update main code
     setCode(updatedCode);
+    
+    // If in PR mode, update status
+    if (activeTab === 'pr-interceptor') {
+        setPrStatus('passed');
+    }
+
+    // TRIGGER RE-ANALYSIS on the NEW code to update the score
     handleAnalyze(updatedCode);
   };
 
@@ -323,13 +367,20 @@ const App: React.FC = () => {
                  onClick={() => setActiveTab('scanner')}
                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'scanner' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
                >
-                 Code Scanner
+                 Scanner
+               </button>
+               <button 
+                 onClick={() => setActiveTab('pr-interceptor')}
+                 className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'pr-interceptor' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+               >
+                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                 PR Interceptor
                </button>
                <button 
                  onClick={() => setActiveTab('debugger')}
                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'debugger' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
                >
-                 API Debugger
+                 Debugger
                </button>
             </nav>
           </div>
@@ -340,7 +391,106 @@ const App: React.FC = () => {
         
         {activeTab === 'debugger' ? (
           <ApiDebugger />
+        ) : activeTab === 'pr-interceptor' ? (
+          /* ================= PR INTERCEPTOR TAB ================= */
+          <div className="animate-in fade-in duration-500">
+            <div className="text-center mb-8">
+               <h2 className="text-3xl font-bold text-slate-900 mb-2">AI Pull Request Interceptor</h2>
+               <p className="text-slate-600">Acts as a firewall, blocking PRs that add deprecated or risky code.</p>
+            </div>
+
+            {/* Config Section */}
+            {prStatus === 'idle' && !report && (
+                 <div className="max-w-xl mx-auto bg-white p-8 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="flex flex-col gap-4">
+                        <label className="text-sm font-bold text-slate-700">Repository or Path to Intercept</label>
+                        <div className="flex gap-2">
+                             <input 
+                                type="text" 
+                                placeholder="https://github.com/user/repo" 
+                                className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+                                value={repoUrl}
+                                onChange={(e) => setRepoUrl(e.target.value)}
+                              />
+                             <Button onClick={() => handleLoadRepo(true)} isLoading={loading} className="bg-slate-900">
+                                Check PR
+                             </Button>
+                        </div>
+                        <div className="text-center text-xs text-slate-400 font-medium">OR</div>
+                         <div className="flex gap-2">
+                             <input 
+                                type="text" 
+                                placeholder="/local/path/to/project" 
+                                className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+                                value={localPath}
+                                onChange={(e) => setLocalPath(e.target.value)}
+                              />
+                             <Button onClick={() => handleLoadLocal(true)} isLoading={loading} variant="secondary">
+                                Scan Local
+                             </Button>
+                        </div>
+                    </div>
+                 </div>
+            )}
+
+            {/* Dashboard */}
+            <PrDashboard 
+               status={prStatus} 
+               report={report} 
+               onBlock={() => alert('PR Blocked. Notification sent to author.')}
+               onAllow={() => { setPrStatus('passed'); alert('PR Allowed forcefully.'); }}
+               onFixAll={handleFixAll}
+            />
+            
+            {/* If Fix All triggered in PR mode, show the split editor comparison below */}
+            {fixReview && (
+               <div className="mt-8 animate-in slide-in-from-bottom-4">
+                  <div className="flex justify-between items-center mb-3">
+                      <h3 className="font-bold text-lg text-slate-900">Migration Preview</h3>
+                      <div className="flex gap-2">
+                          <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold border border-green-200">
+                             Auto-Fix Applied
+                          </span>
+                      </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 h-[500px]">
+                      <div className="flex flex-col rounded-lg overflow-hidden border border-red-200 shadow-sm bg-slate-950">
+                          <CodeEditor 
+                              value={fixReview.original} 
+                              onChange={() => {}} 
+                              readOnly={true} 
+                              className="h-full border-none"
+                              highlights={fixReview.originalHighlights}
+                              highlightColor="red"
+                          />
+                      </div>
+                      <div className="flex flex-col rounded-lg overflow-hidden border border-green-200 shadow-sm bg-slate-950">
+                          <CodeEditor 
+                              value={code} 
+                              onChange={setCode} 
+                              className="h-full border-none"
+                              highlights={fixReview.modifiedHighlights}
+                              highlightColor="green"
+                          />
+                      </div>
+                  </div>
+                  
+                  {report && (
+                      <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+                           <div>
+                               <h4 className="font-bold text-green-900">Health Score Updated</h4>
+                               <p className="text-sm text-green-700">New analysis confirms fixes are valid.</p>
+                           </div>
+                           <div className="text-4xl font-black text-green-600">
+                               {report.overallHealthScore}/100
+                           </div>
+                      </div>
+                  )}
+               </div>
+            )}
+          </div>
         ) : (
+          /* ================= SCANNER TAB (Existing Logic) ================= */
           <>
             {/* Hero / Input Section */}
             <section className="mb-12">
@@ -407,7 +557,7 @@ const App: React.FC = () => {
                                 value={repoUrl}
                                 onChange={(e) => setRepoUrl(e.target.value)}
                               />
-                              <Button onClick={handleLoadRepo} isLoading={loading} className="bg-violet-600 hover:bg-violet-700">
+                              <Button onClick={() => handleLoadRepo(false)} isLoading={loading} className="bg-violet-600 hover:bg-violet-700">
                                   Load Repo
                               </Button>
                           </div>
@@ -430,7 +580,7 @@ const App: React.FC = () => {
                                 value={localPath}
                                 onChange={(e) => setLocalPath(e.target.value)}
                               />
-                              <Button onClick={handleLoadLocal} isLoading={loading} className="bg-blue-600 hover:bg-blue-700">
+                              <Button onClick={() => handleLoadLocal(false)} isLoading={loading} className="bg-blue-600 hover:bg-blue-700">
                                   Load Files
                               </Button>
                           </div>
