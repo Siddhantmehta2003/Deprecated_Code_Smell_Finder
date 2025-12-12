@@ -57,15 +57,15 @@ export const ApiDebugger: React.FC = () => {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2">
-      <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-sm">
         <div className="mb-6 flex justify-between items-start">
           <div>
-            <h2 className="text-xl font-bold text-slate-900 mb-2">API Control Center</h2>
-            <p className="text-slate-600 text-sm">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">API Control Center</h2>
+            <p className="text-slate-600 dark:text-slate-400 text-sm">
               Debug endpoints, view raw JSON responses, and monitor latency in real-time.
             </p>
           </div>
-          <div className="bg-slate-100 px-3 py-1 rounded text-xs text-slate-600 font-mono">
+          <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded text-xs text-slate-600 dark:text-slate-400 font-mono">
             SDK: @google/genai
           </div>
         </div>
@@ -75,15 +75,15 @@ export const ApiDebugger: React.FC = () => {
           {/* Controls Sidebar */}
           <div className="md:col-span-4 lg:col-span-3 space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-slate-900 mb-2">Select Model</label>
+              <label className="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2">Select Model</label>
               <div className="space-y-2">
                 {availableModels.map((m) => (
                   <label 
                     key={m.id}
                     className={`block p-3 border rounded-lg cursor-pointer transition-all ${
                       model === m.id 
-                      ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' 
-                      : 'border-slate-200 hover:border-slate-300'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-500' 
+                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                     }`}
                   >
                     <input 
@@ -94,31 +94,31 @@ export const ApiDebugger: React.FC = () => {
                       onChange={(e) => setModel(e.target.value)}
                       className="sr-only"
                     />
-                    <div className="text-sm font-bold text-slate-900">{m.name}</div>
-                    <div className="text-xs text-slate-500 mt-1">{m.desc}</div>
+                    <div className="text-sm font-bold text-slate-900 dark:text-slate-200">{m.name}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{m.desc}</div>
                   </label>
                 ))}
               </div>
             </div>
             
-            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-xs space-y-3">
-              <div className="font-semibold text-slate-700 uppercase tracking-wider">Metrics</div>
-              <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                <span className="text-slate-500">Status</span>
-                <span className="flex items-center gap-1.5 text-green-700 font-medium">
+            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-xs space-y-3">
+              <div className="font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Metrics</div>
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
+                <span className="text-slate-500 dark:text-slate-400">Status</span>
+                <span className="flex items-center gap-1.5 text-green-700 dark:text-green-400 font-medium">
                   <span className="w-2 h-2 rounded-full bg-green-500"></span>
                   Ready
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-500">Last Latency</span>
-                <span className={`font-mono ${!latency ? 'text-slate-400' : 'text-slate-900'}`}>
+                <span className="text-slate-500 dark:text-slate-400">Last Latency</span>
+                <span className={`font-mono ${!latency ? 'text-slate-400 dark:text-slate-600' : 'text-slate-900 dark:text-slate-200'}`}>
                   {latency ? `${latency}ms` : '--'}
                 </span>
               </div>
             </div>
             
-            <Button onClick={handleTest} isLoading={loading} className="w-full">
+            <Button onClick={handleTest} isLoading={loading} className="w-full bg-slate-900 dark:bg-indigo-600 dark:hover:bg-indigo-700">
               Run Request
             </Button>
           </div>
@@ -126,18 +126,18 @@ export const ApiDebugger: React.FC = () => {
           {/* Input/Output Area */}
           <div className="md:col-span-8 lg:col-span-9 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Request Payload (Prompt)</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Request Payload (Prompt)</label>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 rows={3}
                 placeholder="Enter your prompt here..."
-                className="w-full rounded-lg border border-slate-300 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 sm:text-sm font-mono p-3 bg-white"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 sm:text-sm font-mono p-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200"
               />
             </div>
 
             <div className="flex-1 flex flex-col">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Response Inspector</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Response Inspector</label>
               <div className="relative flex-1 min-h-[400px] bg-slate-950 rounded-lg overflow-hidden border border-slate-800 shadow-inner flex flex-col">
                 <div className="bg-slate-900 px-4 py-2 text-xs text-slate-400 border-b border-slate-800 flex justify-between items-center">
                   <span className="font-mono">JSON Output</span>

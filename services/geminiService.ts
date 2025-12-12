@@ -75,7 +75,7 @@ export const analyzeCode = async (code: string, context?: string): Promise<Analy
   const ai = getClient();
   
   const systemPrompt = `
-    You are 'DeprecCheck AI', a Senior Software Architect and Future-Tech predictor.
+    You are 'DepreCheck AI', a Senior Software Architect and Future-Tech predictor.
     Your task is to scan the provided code (or dependency file) for CURRENT issues and FUTURE risks.
 
     SCORING RULES:

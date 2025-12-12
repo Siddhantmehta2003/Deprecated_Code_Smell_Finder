@@ -14,24 +14,24 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, onApplyFix, onLocat
   const isPrediction = issue.isPrediction;
 
   const severityColors = {
-    [Severity.CRITICAL]: 'border-l-red-500 text-red-700 bg-red-50',
-    [Severity.WARNING]: 'border-l-amber-500 text-amber-700 bg-amber-50',
-    [Severity.INFO]: 'border-l-blue-500 text-blue-700 bg-blue-50',
+    [Severity.CRITICAL]: 'border-l-red-500 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/10',
+    [Severity.WARNING]: 'border-l-amber-500 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10',
+    [Severity.INFO]: 'border-l-blue-500 text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/10',
   };
 
   const badgeColors = {
-    [Severity.CRITICAL]: 'bg-red-100 text-red-800 border-red-200',
-    [Severity.WARNING]: 'bg-amber-100 text-amber-800 border-amber-200',
-    [Severity.INFO]: 'bg-blue-100 text-blue-800 border-blue-200',
+    [Severity.CRITICAL]: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800',
+    [Severity.WARNING]: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+    [Severity.INFO]: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800',
   };
 
   // Prediction specific styles (Magical/Future theme)
   const containerClass = isPrediction
-    ? 'border border-violet-200 bg-white shadow-md hover:shadow-lg hover:shadow-violet-100'
-    : 'border border-slate-200 bg-white shadow-sm hover:shadow-md';
+    ? 'border border-violet-200 dark:border-violet-900/50 bg-white dark:bg-slate-900 shadow-md hover:shadow-lg hover:shadow-violet-100 dark:hover:shadow-violet-900/20'
+    : 'border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md';
   
   const headerClass = isPrediction
-    ? 'bg-gradient-to-r from-violet-50 to-white border-l-4 border-l-violet-500 text-slate-800'
+    ? 'bg-gradient-to-r from-violet-50 to-white dark:from-violet-900/10 dark:to-slate-900 border-l-4 border-l-violet-500 text-slate-800 dark:text-slate-200'
     : `${severityColors[issue.severity]} border-l-4`;
 
   return (
@@ -56,38 +56,38 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, onApplyFix, onLocat
               </span>
             )}
             
-            <span className="text-[10px] text-slate-500 font-medium border border-slate-200 px-2 py-0.5 rounded bg-white uppercase tracking-wide">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded bg-white dark:bg-slate-800 uppercase tracking-wide">
               {issue.category}
             </span>
             
-            <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono flex items-center gap-1">
               <span>EOL:</span>
-              <span className={isPrediction ? "text-violet-600 font-bold" : ""}>{issue.estimatedEndOfLife}</span>
+              <span className={isPrediction ? "text-violet-600 dark:text-violet-400 font-bold" : ""}>{issue.estimatedEndOfLife}</span>
             </span>
           </div>
 
-          <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+          <h3 className="text-base font-semibold flex items-center gap-2">
              {issue.title}
           </h3>
-          <p className="text-sm text-slate-600 mt-1 line-clamp-1 opacity-80">{issue.description}</p>
+          <p className="text-sm mt-1 line-clamp-1 opacity-80">{issue.description}</p>
           
           {/* Prediction specific preview stats */}
           {isPrediction && issue.predictionConfidence && (
             <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
-               <div className="flex items-center gap-2 bg-violet-50 px-2 py-1 rounded border border-violet-100">
-                  <span className="text-xs font-bold text-violet-800 uppercase tracking-tight">Deprecation Probability</span>
-                  <div className="h-2.5 w-24 bg-slate-200 rounded-full overflow-hidden border border-slate-300">
+               <div className="flex items-center gap-2 bg-violet-50 dark:bg-violet-900/20 px-2 py-1 rounded border border-violet-100 dark:border-violet-800">
+                  <span className="text-xs font-bold text-violet-800 dark:text-violet-300 uppercase tracking-tight">Deprecation Probability</span>
+                  <div className="h-2.5 w-24 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden border border-slate-300 dark:border-slate-600">
                      <div 
                        className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full" 
                        style={{ width: `${issue.predictionConfidence}%` }}
                      />
                   </div>
-                  <span className="text-xs font-mono font-bold text-violet-700">{issue.predictionConfidence}%</span>
+                  <span className="text-xs font-mono font-bold text-violet-700 dark:text-violet-300">{issue.predictionConfidence}%</span>
                </div>
                
                <div className="flex gap-1">
                  {issue.riskFactors?.slice(0, 2).map((risk, i) => (
-                   <span key={i} className="text-[10px] px-1.5 py-1 bg-white text-slate-600 rounded border border-slate-200 shadow-sm">
+                   <span key={i} className="text-[10px] px-1.5 py-1 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700 shadow-sm">
                      {risk}
                    </span>
                  ))}
@@ -110,17 +110,17 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, onApplyFix, onLocat
       </div>
 
       {expanded && (
-        <div className="p-4 bg-slate-50 border-t border-slate-100 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+        <div className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 space-y-4 animate-in fade-in zoom-in-95 duration-200">
           
           {/* Prediction Explanation Section */}
           {isPrediction && issue.riskFactors && (
-             <div className="bg-violet-50 border border-violet-100 rounded-md p-3">
-               <h4 className="text-xs font-bold text-violet-800 uppercase tracking-wider mb-2 flex items-center gap-1">
+             <div className="bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-900/30 rounded-md p-3">
+               <h4 className="text-xs font-bold text-violet-800 dark:text-violet-300 uppercase tracking-wider mb-2 flex items-center gap-1">
                  Why we predicted this?
                </h4>
                <div className="flex flex-wrap gap-2">
                  {issue.riskFactors.map((risk, idx) => (
-                   <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-violet-100 text-xs text-violet-700 shadow-sm">
+                   <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-slate-800 border border-violet-100 dark:border-violet-900/30 text-xs text-violet-700 dark:text-violet-300 shadow-sm">
                       <span className="w-1.5 h-1.5 rounded-full bg-violet-500"></span>
                       {risk}
                    </span>
@@ -130,14 +130,14 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, onApplyFix, onLocat
           )}
 
           <div>
-            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Detailed Analysis</h4>
-            <p className="text-sm text-slate-700 leading-relaxed">{issue.description}</p>
+            <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Detailed Analysis</h4>
+            <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{issue.description}</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <div className="flex justify-between items-center h-6">
-                <h4 className="text-xs font-semibold text-red-600 uppercase tracking-wider flex items-center gap-1">
+                <h4 className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-1">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div> Problematic Code
                 </h4>
                 {onLocate && (
@@ -146,7 +146,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, onApplyFix, onLocat
                       e.stopPropagation();
                       onLocate(issue);
                     }}
-                    className="group flex items-center gap-1.5 px-3 py-1 bg-white border border-slate-300 text-slate-700 text-[10px] font-bold uppercase rounded shadow-sm hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-all active:translate-y-0.5"
+                    className="group flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-[10px] font-bold uppercase rounded shadow-sm hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-300 hover:border-blue-300 dark:hover:border-blue-700 transition-all active:translate-y-0.5"
                     title="Scroll to code in editor and show diff"
                   >
                     <svg className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -157,7 +157,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, onApplyFix, onLocat
                 )}
               </div>
               <div className="relative group">
-                <pre className="bg-white border border-red-100 rounded-md p-3 text-xs font-mono text-slate-700 overflow-x-auto shadow-sm">
+                <pre className="bg-white dark:bg-slate-950 border border-red-100 dark:border-red-900/30 rounded-md p-3 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto shadow-sm">
                   <code>{issue.affectedCode}</code>
                 </pre>
               </div>
@@ -165,7 +165,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, onApplyFix, onLocat
             
             <div className="space-y-2">
               <div className="flex justify-between items-center h-6">
-                 <h4 className={`text-xs font-semibold uppercase tracking-wider flex items-center gap-1 ${isPrediction ? 'text-violet-600' : 'text-green-600'}`}>
+                 <h4 className={`text-xs font-semibold uppercase tracking-wider flex items-center gap-1 ${isPrediction ? 'text-violet-600 dark:text-violet-400' : 'text-green-600 dark:text-green-400'}`}>
                     <div className={`w-1.5 h-1.5 rounded-full ${isPrediction ? 'bg-violet-500' : 'bg-green-500'}`}></div> 
                     {isPrediction ? 'Future-Proof Replacement' : 'Suggested Fix'}
                  </h4>
@@ -184,7 +184,7 @@ export const IssueCard: React.FC<IssueCardProps> = ({ issue, onApplyFix, onLocat
                     </button>
                  )}
               </div>
-              <pre className={`border rounded-md p-3 text-xs font-mono overflow-x-auto shadow-inner ${isPrediction ? 'bg-violet-50 border-violet-200 text-violet-900' : 'bg-green-50 border-green-200 text-green-900'}`}>
+              <pre className={`border rounded-md p-3 text-xs font-mono overflow-x-auto shadow-inner ${isPrediction ? 'bg-violet-50 dark:bg-violet-900/10 border-violet-200 dark:border-violet-900/30 text-violet-900 dark:text-violet-300' : 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900/30 text-green-900 dark:text-green-300'}`}>
                 <code>{issue.replacementCode}</code>
               </pre>
             </div>

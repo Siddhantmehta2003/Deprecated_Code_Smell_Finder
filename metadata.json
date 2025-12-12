@@ -1,5 +1,5 @@
 {
-  "name": "DeprecCheck AI",
+  "name": "DepreCheck AI",
   "description": "An AI-powered code scanner that identifies deprecated libraries, security risks, and upcoming breaking changes in your codebase, providing migration paths and EOL timelines.",
   "requestFramePermissions": []
 }

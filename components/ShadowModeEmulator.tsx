@@ -295,17 +295,17 @@ export const ShadowModeEmulator: React.FC = () => {
   }[activeProfile.colorTheme] || 'from-slate-500 to-slate-700';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans p-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans p-6">
       
       {/* Header Widget */}
-      <div className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row items-center justify-between bg-slate-900/50 p-4 rounded-xl border border-slate-800 backdrop-blur-sm gap-4">
+      <div className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row items-center justify-between bg-white dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800 backdrop-blur-sm gap-4 shadow-sm">
         <div className="flex items-center gap-4 w-full md:w-auto">
-           <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${themeColors} flex items-center justify-center text-2xl shadow-lg shadow-blue-900/20`}>
+           <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${themeColors} flex items-center justify-center text-2xl shadow-lg shadow-blue-500/20 dark:shadow-blue-900/20 text-white`}>
              {activeProfile.icon}
            </div>
            <div>
-             <h2 className="text-xl font-bold text-white tracking-tight">Shadow-Mode Emulator</h2>
-             <p className="text-xs text-slate-400">Simulating Environment: <span className="text-white font-mono">{activeProfile.versionLabel}</span></p>
+             <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Shadow-Mode Emulator</h2>
+             <p className="text-xs text-slate-500 dark:text-slate-400">Simulating Environment: <span className="text-slate-700 dark:text-white font-mono">{activeProfile.versionLabel}</span></p>
            </div>
         </div>
 
@@ -315,7 +315,7 @@ export const ShadowModeEmulator: React.FC = () => {
                <select 
                  value={activeProfileId}
                  onChange={(e) => setActiveProfileId(e.target.value)}
-                 className="bg-slate-800 border border-slate-700 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-48 p-2.5"
+                 className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-48 p-2.5"
                >
                  {EMULATOR_PROFILES.map(p => (
                    <option key={p.id} value={p.id}>{p.name} {p.versionLabel}</option>
@@ -328,8 +328,8 @@ export const ShadowModeEmulator: React.FC = () => {
              disabled={isBooting}
              className={`ml-4 px-5 py-2.5 rounded-lg font-bold text-sm shadow-xl transition-all flex items-center gap-2 border border-white/10 ${
                 isBooting 
-                ? 'bg-slate-800 text-slate-400 cursor-not-allowed' 
-                : `bg-gradient-to-r ${themeColors} text-white hover:scale-105 active:scale-95 hover:shadow-2xl hover:shadow-${activeProfile.colorTheme}-500/20`
+                ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed' 
+                : `bg-gradient-to-r ${themeColors} text-white hover:scale-105 active:scale-95 hover:shadow-2xl`
              }`}
            >
              {isBooting ? (
@@ -351,20 +351,18 @@ export const ShadowModeEmulator: React.FC = () => {
          
          {/* Left Panel: Code Input */}
          <div className="flex flex-col gap-4">
-            <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl flex flex-col">
-               <div className="bg-slate-950 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
-                  <span className="text-xs font-mono text-slate-400">src/input.js</span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-500">Editor Active</span>
+            <div className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm flex flex-col">
+               <div className="bg-slate-50 dark:bg-slate-950 px-4 py-2 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                  <span className="text-xs font-mono text-slate-500 dark:text-slate-400">src/input.js</span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-500">Editor Active</span>
                </div>
                <div className="flex-1 relative">
                  <CodeEditor 
                    value={code} 
                    onChange={(val) => {
                        setCode(val);
-                       // Optional: If user edits, maybe invalidate the previous result visually?
-                       // For now we keep the old result until they click Start again
                    }} 
-                   className="absolute inset-0 h-full bg-transparent"
+                   className="absolute inset-0 h-full bg-transparent border-none"
                  />
                </div>
             </div>
@@ -373,13 +371,13 @@ export const ShadowModeEmulator: React.FC = () => {
             <div className="flex gap-2">
                <button 
                  onClick={() => setCode(`import React, { forwardRef, useState } from 'react';\n\nconst MyInput = forwardRef((props, ref) => (\n  <input {...props} ref={ref} />\n));\n\nMyInput.defaultProps = { type: 'text' };`)}
-                 className="text-xs px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-colors"
+                 className="text-xs px-3 py-2 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 transition-colors shadow-sm"
                >
                  Load React Legacy Sample
                </button>
                <button 
                  onClick={() => setCode(`const fs = require('fs');\nconst path = require('path');\n\nif (fs.exists(__dirname + '/config', () => {})) {\n  console.log('Exists');\n}`)}
-                 className="text-xs px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-colors"
+                 className="text-xs px-3 py-2 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 transition-colors shadow-sm"
                >
                  Load Node.js Legacy Sample
                </button>
@@ -391,25 +389,27 @@ export const ShadowModeEmulator: React.FC = () => {
             
             {!simulationResult && !isBooting ? (
                 // --- IDLE STATE ---
-                <div className="h-full bg-slate-900 border border-slate-800 rounded-xl flex flex-col items-center justify-center text-center p-8 opacity-50 border-dashed">
+                <div className="h-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col items-center justify-center text-center p-8 border-dashed shadow-sm">
                     <div className={`w-20 h-20 rounded-full bg-gradient-to-br ${themeColors} flex items-center justify-center mb-6 opacity-20`}>
-                        <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+                        <svg className="w-10 h-10 text-slate-900 dark:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-400">Kernel Idle</h3>
+                    <h3 className="text-xl font-bold text-slate-500 dark:text-slate-400">Kernel Idle</h3>
                     <p className="text-slate-500 max-w-sm mt-2">
-                        Select a target environment and click <span className="text-slate-300 font-semibold">Start Simulation</span> to boot the emulator and analyze compatibility.
+                        Select a target environment and click <span className="text-slate-700 dark:text-slate-300 font-semibold">Start Simulation</span> to boot the emulator and analyze compatibility.
                     </p>
                 </div>
             ) : isBooting ? (
                 // --- BOOTING STATE ---
-                <div className="h-full bg-slate-900 border border-slate-800 rounded-xl flex flex-col items-center justify-center text-center p-8 relative overflow-hidden">
+                <div className="h-full bg-slate-900 border border-slate-800 rounded-xl flex flex-col items-center justify-center text-center p-8 relative overflow-hidden shadow-inner">
+                    {/* Always keep booting screen dark for "console" effect, or make it light compatible? 
+                        Let's keep it somewhat terminal-like but cleaner. */}
                     <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10"></div>
-                    <div className="font-mono text-green-500 text-xs mb-4 w-64 text-left space-y-1">
+                    <div className="font-mono text-green-500 text-xs mb-4 w-64 text-left space-y-1 z-10">
                         <div>> boot {activeProfile.id}</div>
                         <div>> mounting virtual_fs...</div>
                         <div className="animate-pulse">> loading static_analyzer...</div>
                     </div>
-                    <div className="w-64 h-1 bg-slate-800 rounded-full overflow-hidden">
+                    <div className="w-64 h-1 bg-slate-800 rounded-full overflow-hidden z-10">
                         <div className={`h-full bg-gradient-to-r ${themeColors} animate-[shimmer_1s_infinite]`}></div>
                     </div>
                 </div>
@@ -418,25 +418,25 @@ export const ShadowModeEmulator: React.FC = () => {
                 <>
                     {/* Status Card */}
                     <div className="grid grid-cols-3 gap-4 h-32 animate-in fade-in slide-in-from-bottom-4">
-                    <div className="col-span-1 bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-center items-center relative overflow-hidden group">
-                        <div className={`absolute inset-0 bg-gradient-to-br ${themeColors} opacity-10 group-hover:opacity-20 transition-opacity`}></div>
-                        <span className="text-xs text-slate-400 uppercase tracking-widest font-semibold z-10">Compatibility Score</span>
+                    <div className="col-span-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col justify-center items-center relative overflow-hidden group shadow-sm">
+                        <div className={`absolute inset-0 bg-gradient-to-br ${themeColors} opacity-5 group-hover:opacity-10 transition-opacity`}></div>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-widest font-semibold z-10">Compatibility Score</span>
                         <span className={`text-5xl font-black z-10 mt-2 ${
-                            simulationResult.score === 100 ? 'text-green-400' :
-                            simulationResult.score > 50 ? 'text-amber-400' : 'text-red-500'
+                            simulationResult.score === 100 ? 'text-green-500 dark:text-green-400' :
+                            simulationResult.score > 50 ? 'text-amber-500 dark:text-amber-400' : 'text-red-500'
                         }`}>
                             {simulationResult.score}
                         </span>
                     </div>
-                    <div className="col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-hidden relative">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-slate-700 to-transparent"></div>
+                    <div className="col-span-2 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 overflow-hidden relative shadow-inner">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-700 to-transparent"></div>
                         <h3 className="text-xs font-bold text-slate-500 uppercase mb-2">Simulated Runtime Logs</h3>
                         <div className="font-mono text-xs space-y-1 h-full overflow-y-auto pb-4">
                             {simulationResult.logs.map((log, i) => (
                                 <div key={i} className={`truncate ${
-                                    log.includes('[Error]') ? 'text-red-400' : 
-                                    log.includes('[Warn]') ? 'text-amber-400' : 
-                                    log.includes('[Success]') ? 'text-green-400' : 'text-slate-400'
+                                    log.includes('[Error]') ? 'text-red-600 dark:text-red-400' : 
+                                    log.includes('[Warn]') ? 'text-amber-600 dark:text-amber-400' : 
+                                    log.includes('[Success]') ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'
                                 }`}>
                                 <span className="opacity-50 mr-2">{new Date().toLocaleTimeString()}</span>
                                 {log}
@@ -447,41 +447,41 @@ export const ShadowModeEmulator: React.FC = () => {
                     </div>
 
                     {/* Detailed Results */}
-                    <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-2xl animate-in fade-in slide-in-from-bottom-8 duration-500">
-                        <div className="bg-slate-950 px-4 py-3 border-b border-slate-800 flex justify-between items-center">
-                        <h3 className="font-bold text-slate-300">Predicted Runtime Exceptions</h3>
-                        <span className="bg-red-500/20 text-red-400 text-xs px-2 py-0.5 rounded border border-red-500/30">
+                    <div className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-lg animate-in fade-in slide-in-from-bottom-8 duration-500">
+                        <div className="bg-slate-50 dark:bg-slate-950 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                        <h3 className="font-bold text-slate-700 dark:text-slate-300">Predicted Runtime Exceptions</h3>
+                        <span className="bg-red-50 dark:bg-red-500/20 text-red-600 dark:text-red-400 text-xs px-2 py-0.5 rounded border border-red-200 dark:border-red-500/30">
                             {simulationResult.breakages.length} Events
                         </span>
                         </div>
                         
                         <div className="flex-1 overflow-y-auto p-4 space-y-3">
                         {simulationResult.breakages.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-600 opacity-50">
+                            <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-600 opacity-50">
                                 <svg className="w-16 h-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                 <p>No breakages detected in {activeProfile.versionLabel}</p>
                             </div>
                         ) : (
                             simulationResult.breakages.map((b, idx) => (
                                 <div key={idx} className={`p-3 rounded-lg border flex gap-3 ${
-                                    b.severity === 'Critical' ? 'bg-red-950/30 border-red-900/50' : 'bg-amber-950/30 border-amber-900/50'
+                                    b.severity === 'Critical' ? 'bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-900/50' : 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-900/50'
                                 }`}>
                                 <div className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                                     b.severity === 'Critical' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]' : 'bg-amber-500'
                                 }`}></div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-start mb-1">
-                                        <h4 className={`text-sm font-bold ${b.severity === 'Critical' ? 'text-red-400' : 'text-amber-400'}`}>
+                                        <h4 className={`text-sm font-bold ${b.severity === 'Critical' ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
                                             {b.message}
                                         </h4>
                                         <span className="text-[10px] font-mono text-slate-500">Line {b.line}</span>
                                     </div>
-                                    <div className="bg-slate-950/50 p-2 rounded border border-slate-800/50 font-mono text-xs text-slate-400 mb-2 truncate">
+                                    <div className="bg-white dark:bg-slate-950/50 p-2 rounded border border-slate-200 dark:border-slate-800/50 font-mono text-xs text-slate-600 dark:text-slate-400 mb-2 truncate">
                                         {b.match}
                                     </div>
                                     <div className="flex items-center gap-2 text-xs">
-                                        <span className="text-blue-400 font-semibold">Fix:</span>
-                                        <span className="text-slate-400">{b.suggestion}</span>
+                                        <span className="text-blue-600 dark:text-blue-400 font-semibold">Fix:</span>
+                                        <span className="text-slate-600 dark:text-slate-400">{b.suggestion}</span>
                                     </div>
                                 </div>
                                 </div>
@@ -491,20 +491,20 @@ export const ShadowModeEmulator: React.FC = () => {
 
                         {/* Auto-Patch Preview */}
                         {simulationResult.patchedCode && (
-                        <div className="border-t border-slate-800 p-4 bg-slate-950/30">
+                        <div className="border-t border-slate-200 dark:border-slate-800 p-4 bg-slate-50 dark:bg-slate-950/30">
                             <div className="flex justify-between items-center mb-2">
-                                <h4 className="text-xs font-bold text-green-500 uppercase tracking-wider flex items-center gap-2">
+                                <h4 className="text-xs font-bold text-green-600 dark:text-green-500 uppercase tracking-wider flex items-center gap-2">
                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                                 Auto-Migration Preview
                                 </h4>
                                 <button 
                                 onClick={() => setCode(simulationResult.patchedCode)}
-                                className="text-[10px] bg-green-900/30 text-green-400 border border-green-900/50 px-2 py-1 rounded hover:bg-green-900/50 transition-colors"
+                                className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50 px-2 py-1 rounded hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
                                 >
                                 Apply Patches
                                 </button>
                             </div>
-                            <pre className="text-xs text-slate-500 font-mono overflow-x-auto p-2 bg-slate-950 rounded border border-slate-900">
+                            <pre className="text-xs text-slate-600 dark:text-slate-500 font-mono overflow-x-auto p-2 bg-white dark:bg-slate-950 rounded border border-slate-200 dark:border-slate-900">
                                 {simulationResult.patchedCode.split('\n').slice(0, 3).join('\n')}
                                 {simulationResult.patchedCode.split('\n').length > 3 && '\n...'}
                             </pre>

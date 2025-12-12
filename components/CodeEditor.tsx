@@ -85,14 +85,13 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
     [...new Set(highlights)].forEach(h => {
         if (!h) return;
         // Simple global search for exact matches
-        // In a real app, we'd use more sophisticated token matching
         let pos = 0;
         const searchStr = h;
         while (pos < value.length) {
             const index = value.indexOf(searchStr, pos);
             if (index === -1) break;
             ranges.push({ start: index, end: index + searchStr.length });
-            pos = index + 1; // Don't skip whole length to find overlaps, though overlaps are rare here
+            pos = index + 1; 
         }
     });
 
@@ -145,13 +144,13 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
   const lineNumbers = Array.from({ length: Math.max(lineCount, 1) }, (_, i) => i + 1).join('\n');
 
   return (
-    <div className={`relative w-full border border-slate-200 rounded-lg overflow-hidden bg-slate-950 text-slate-50 transition-all flex flex-col ${readOnly ? 'opacity-100' : 'focus-within:ring-2 focus-within:ring-blue-500'} ${className}`}>
+    <div className={`relative w-full border rounded-lg overflow-hidden transition-all flex flex-col ${readOnly ? 'opacity-100' : 'focus-within:ring-2 focus-within:ring-blue-500'} ${className} bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-700`}>
       {/* Header */}
-      <div className="flex-none bg-slate-900 px-4 py-2 text-xs text-slate-400 border-b border-slate-800 flex justify-between items-center z-20">
-        <span className="font-semibold text-slate-300">{readOnly ? (highlightColor === 'red' ? 'Original / Deprecated' : 'New / Migrated') : 'Code Editor'}</span>
+      <div className="flex-none px-4 py-2 text-xs border-b flex justify-between items-center z-20 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
+        <span className="font-semibold text-slate-700 dark:text-slate-300">{readOnly ? (highlightColor === 'red' ? 'Original / Deprecated' : 'New / Migrated') : 'Code Editor'}</span>
         <div className="flex items-center gap-2">
             <span className="font-mono opacity-50">{lineCount} lines</span>
-            <span className={`px-2 py-0.5 rounded text-[10px] uppercase tracking-wider ${readOnly ? 'bg-slate-800 text-slate-300' : 'bg-blue-900/30 text-blue-200 border border-blue-900'}`}>
+            <span className={`px-2 py-0.5 rounded text-[10px] uppercase tracking-wider ${readOnly ? 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-200 border border-blue-200 dark:border-blue-900'}`}>
             {readOnly ? 'Read Only' : 'Editable'}
             </span>
         </div>
@@ -161,7 +160,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
          {/* Line Numbers */}
          <div 
             ref={lineNumbersRef}
-            className="flex-none w-10 bg-slate-900 text-slate-600 text-right pr-2 pt-4 text-sm font-mono leading-relaxed select-none overflow-hidden"
+            className="flex-none w-10 text-right pr-2 pt-4 text-sm font-mono leading-relaxed select-none overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-400 dark:text-slate-600"
             style={{ fontFamily: 'JetBrains Mono, monospace' }}
          >
             {lineNumbers}
@@ -187,7 +186,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
                 onScroll={handleScroll}
                 placeholder={placeholder}
                 readOnly={readOnly}
-                className={`absolute inset-0 w-full h-full p-4 bg-transparent border-none resize-none focus:outline-none font-mono text-sm leading-relaxed whitespace-pre overflow-auto z-10 selection:bg-blue-500/40 selection:text-white ${readOnly ? 'cursor-default' : ''}`}
+                className={`absolute inset-0 w-full h-full p-4 bg-transparent border-none resize-none focus:outline-none font-mono text-sm leading-relaxed whitespace-pre overflow-auto z-10 text-slate-900 dark:text-slate-100 selection:bg-blue-500/40 selection:text-white ${readOnly ? 'cursor-default' : ''}`}
                 spellCheck={false}
                 style={{ 
                     fontFamily: 'JetBrains Mono, monospace',
