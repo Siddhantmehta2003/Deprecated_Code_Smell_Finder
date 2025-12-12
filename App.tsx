@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo } from 'react';
 import { analyzeCode } from './services/geminiService';
 import { scanGitRepo, scanLocalPath } from './services/backendService';
@@ -10,8 +11,9 @@ import { DependencyTable } from './components/DependencyTable';
 import { ApiDebugger } from './components/ApiDebugger';
 import { DiffViewer } from './components/DiffViewer';
 import { PrDashboard } from './components/PrDashboard';
+import { ShadowModeEmulator } from './components/ShadowModeEmulator';
 
-type Tab = 'scanner' | 'pr-interceptor' | 'debugger';
+type Tab = 'scanner' | 'pr-interceptor' | 'shadow-mode' | 'debugger';
 type InputMode = 'manual' | 'git' | 'local';
 
 // Define the state for the fix review mode
@@ -453,6 +455,13 @@ const App: React.FC = () => {
                  PR Interceptor
                </button>
                <button 
+                 onClick={() => setActiveTab('shadow-mode')}
+                 className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'shadow-mode' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-900'}`}
+               >
+                 <span className={`${activeTab === 'shadow-mode' ? 'text-green-400' : 'text-slate-400'}`}>⚡</span>
+                 Shadow Mode
+               </button>
+               <button 
                  onClick={() => setActiveTab('debugger')}
                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'debugger' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
                >
@@ -467,6 +476,11 @@ const App: React.FC = () => {
         
         {activeTab === 'debugger' ? (
           <ApiDebugger />
+        ) : activeTab === 'shadow-mode' ? (
+          /* ================= SHADOW MODE EMULATOR TAB ================= */
+          <div className="animate-in fade-in duration-500">
+             <ShadowModeEmulator />
+          </div>
         ) : activeTab === 'pr-interceptor' ? (
           /* ================= PR INTERCEPTOR TAB ================= */
           <div className="animate-in fade-in duration-500">
