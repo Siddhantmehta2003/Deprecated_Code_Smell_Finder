@@ -76,8 +76,8 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
     if (!highlights || highlights.length === 0 || !value) return value;
     
     const highlightClass = highlightColor === 'red' 
-        ? 'bg-red-500/30 text-transparent' 
-        : 'bg-green-500/30 text-transparent';
+        ? 'bg-red-500/30 text-transparent animate-pulse' 
+        : 'bg-green-500/30 text-transparent animate-pulse';
 
     // Find all occurrences of highlights
     const ranges: {start: number, end: number}[] = [];

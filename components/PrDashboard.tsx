@@ -89,9 +89,10 @@ export const PrDashboard: React.FC<PrDashboardProps> = ({ status, report, onFixA
                  </div>
 
                  <div className="mt-6 space-y-3">
-                    <Button onClick={onFixAll} className="w-full bg-slate-900 hover:bg-slate-800 shadow-lg group">
-                        <span className="flex items-center justify-center gap-2">
-                            <span>Auto-Migrate & Merge</span>
+                    <Button onClick={onFixAll} className="w-full bg-slate-900 hover:bg-slate-800 shadow-lg group relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-indigo-600 opacity-0 group-hover:opacity-20 transition-opacity"></div>
+                        <span className="flex items-center justify-center gap-2 relative z-10">
+                            <span>AI One-Click Migrate & Merge</span>
                             <svg className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                         </span>
                     </Button>

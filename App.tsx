@@ -23,6 +23,13 @@ interface FixReviewState {
   isBulkFix?: boolean;
 }
 
+interface ScannedFile {
+  name: string;
+  path: string;
+  content: string;
+  selected: boolean;
+}
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('scanner');
   const [inputMode, setInputMode] = useState<InputMode>('manual');
@@ -30,7 +37,7 @@ const App: React.FC = () => {
   // Input states
   const [code, setCode] = useState<string>('');
   const [repoUrl, setRepoUrl] = useState('');
-  const [localPath, setLocalPath] = useState('');
+  const [scannedFiles, setScannedFiles] = useState<ScannedFile[]>([]);
   
   const [report, setReport] = useState<AnalysisReport | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -52,6 +59,10 @@ const App: React.FC = () => {
 
   // Ref to control the editor programmatically
   const editorRef = useRef<CodeEditorHandle>(null);
+  
+  // Ref for directory upload
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Calculate Dependency Stats for Navbar
   const depStats = useMemo(() => {
@@ -100,6 +111,7 @@ const App: React.FC = () => {
     if (!repoUrl) return;
     setLoading(true);
     setError(null);
+    setScannedFiles([]);
     if (isPrCheck) setPrStatus('checking');
 
     try {
@@ -123,37 +135,93 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLoadLocal = async (isPrCheck: boolean = false) => {
-    if (!localPath) return;
+  const processSelectedFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
     setLoading(true);
     setError(null);
-    if (isPrCheck) setPrStatus('checking');
+    setScannedFiles([]);
+    setReport(null);
+    setPrStatus('idle');
 
     try {
-        const result = await scanLocalPath(localPath);
-        setCode(result.context);
-        setInputMode('manual'); // Switch to editor view
-        
-        // Auto-analyze
-        const analysis = await analyzeCode(result.context);
-        setReport(analysis);
-        
-        if (isPrCheck) {
-             setPrStatus(analysis.issues.length > 0 ? 'blocked' : 'passed');
-        }
+      // Filter for code files to avoid binary data
+      const validExtensions = ['.js', '.jsx', '.ts', '.tsx', '.py', '.json', '.html', '.css', '.java', '.go', '.rs'];
+      const codeFiles = Array.from(files).filter((file: File) => 
+        validExtensions.some(ext => file.name.endsWith(ext)) && 
+        !file.name.includes('node_modules') &&
+        !file.name.includes('.git')
+      );
+
+      if (codeFiles.length === 0) {
+        throw new Error("No relevant code files found.");
+      }
+
+      const filePromises = codeFiles.map((file: File) => {
+          return new Promise<ScannedFile>((resolve, reject) => {
+              const reader = new FileReader();
+              // For individual files, webkitRelativePath might be empty, fallback to name
+              const filePath = (file as any).webkitRelativePath || file.name;
+              
+              reader.onload = (e) => {
+                  resolve({
+                      name: file.name,
+                      path: filePath,
+                      content: e.target?.result as string,
+                      selected: true // Select all by default
+                  });
+              };
+              reader.onerror = reject;
+              reader.readAsText(file);
+          });
+      });
+
+      const processedFiles = await Promise.all(filePromises);
+      setScannedFiles(processedFiles);
+      setInputMode('local');
+
     } catch (err: any) {
-        setError(err.message);
-        setPrStatus('idle');
+      setError(err.message || "Failed to read files");
     } finally {
-        setLoading(false);
+      setLoading(false);
+      if (folderInputRef.current) folderInputRef.current.value = '';
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  const handleFolderSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    processSelectedFiles(event.target.files);
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+     processSelectedFiles(event.target.files);
+  };
+
+  const toggleFileSelection = (index: number) => {
+    setScannedFiles(prev => prev.map((f, i) => i === index ? { ...f, selected: !f.selected } : f));
+  };
+
+  const toggleAllFiles = (select: boolean) => {
+    setScannedFiles(prev => prev.map(f => ({ ...f, selected: select })));
+  };
+
+  const runLocalScan = () => {
+      const activeFiles = scannedFiles.filter(f => f.selected);
+      if (activeFiles.length === 0) {
+          setError("Please select at least one file to scan.");
+          return;
+      }
+      
+      const combinedContext = activeFiles.map(f => `// File: ${f.path}\n${f.content}`).join('\n');
+      setCode(combinedContext);
+      handleAnalyze(combinedContext, true); // true = isPrCheck
   };
 
   const handleLocateCode = (issue: Issue) => {
     // Cannot locate if in review mode (split screen)
     if (fixReview) return;
     
-    // 1. Show DiffViewer
+    // 1. Show DiffViewer with the issue
     setPreviewIssue(issue);
     
     // 2. Highlight text in Editor (Red for 'problem')
@@ -161,12 +229,14 @@ const App: React.FC = () => {
     setHighlightColor('red');
     
     // 3. Scroll to it
-    editorRef.current?.highlight(issue.affectedCode);
-    
-    const editorElement = document.getElementById('main-editor');
-    if (editorElement) {
-        editorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    // Slight timeout to allow UI state to settle
+    setTimeout(() => {
+        editorRef.current?.highlight(issue.affectedCode);
+        const editorElement = document.getElementById('main-editor');
+        if (editorElement) {
+            editorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 10);
   };
 
   const handleApplyFix = (issue: Issue) => {
@@ -197,7 +267,7 @@ const App: React.FC = () => {
           editorRef.current?.highlight(replacementCode);
       }, 50);
 
-      // Auto analyze the new code
+      // Auto analyze the new code to update dependency status in navbar
       handleAnalyze(newCode);
 
     } else {
@@ -264,12 +334,12 @@ const App: React.FC = () => {
     // Update main code
     setCode(updatedCode);
     
-    // If in PR mode, update status
+    // CRITICAL for PR Interceptor: Only unblock if migration happens
     if (activeTab === 'pr-interceptor') {
         setPrStatus('passed');
     }
 
-    // TRIGGER RE-ANALYSIS on the NEW code to update the score
+    // TRIGGER RE-ANALYSIS on the NEW code to update the score and dependencies in navbar
     handleAnalyze(updatedCode);
   };
 
@@ -311,15 +381,21 @@ const App: React.FC = () => {
                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
                            depStats.breaking > 0 
                            ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' 
-                           : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                           : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100 shadow-sm'
                        }`}
                        title="Click to view dependency details"
                     >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                        </svg>
+                        {depStats.breaking > 0 ? (
+                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                           </svg>
+                        ) : (
+                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                           </svg>
+                        )}
                         <span>{depStats.breaking > 0 ? `${depStats.breaking} Breaking Changes` : 'Libraries Compatible'}</span>
-                        <span className="bg-white px-1.5 py-0.5 rounded-full border border-current opacity-60 text-[10px]">{depStats.total}</span>
+                        <span className="bg-white px-1.5 py-0.5 rounded-full border border-current opacity-60 text-[10px] min-w-[20px] text-center">{depStats.total}</span>
                     </button>
 
                     {showDeps && (
@@ -403,7 +479,7 @@ const App: React.FC = () => {
             {prStatus === 'idle' && !report && (
                  <div className="max-w-xl mx-auto bg-white p-8 rounded-xl border border-slate-200 shadow-sm">
                     <div className="flex flex-col gap-4">
-                        <label className="text-sm font-bold text-slate-700">Repository or Path to Intercept</label>
+                        <label className="text-sm font-bold text-slate-700">Repository or Local Code to Intercept</label>
                         <div className="flex gap-2">
                              <input 
                                 type="text" 
@@ -417,20 +493,93 @@ const App: React.FC = () => {
                              </Button>
                         </div>
                         <div className="text-center text-xs text-slate-400 font-medium">OR</div>
-                         <div className="flex gap-2">
-                             <input 
-                                type="text" 
-                                placeholder="/local/path/to/project" 
-                                className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
-                                value={localPath}
-                                onChange={(e) => setLocalPath(e.target.value)}
-                              />
-                             <Button onClick={() => handleLoadLocal(true)} isLoading={loading} variant="secondary">
-                                Scan Local
-                             </Button>
+                         
+                         {/* File Selection Area */}
+                         <div className="grid grid-cols-2 gap-4">
+                             {/* Folder Button */}
+                             <div className="flex flex-col gap-2 items-center justify-center p-4 border-2 border-dashed border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group" onClick={() => folderInputRef.current?.click()}>
+                                 <input 
+                                    type="file" 
+                                    ref={folderInputRef}
+                                    className="hidden"
+                                    // @ts-ignore - webkitdirectory is standard in all modern browsers but not in TS definition
+                                    webkitdirectory=""
+                                    directory=""
+                                    multiple
+                                    onChange={handleFolderSelect}
+                                  />
+                                 <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center group-hover:bg-blue-100 group-hover:scale-110 transition-all">
+                                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                                 </div>
+                                 <span className="text-sm font-medium text-slate-600">Select Folder</span>
+                            </div>
+
+                             {/* Files Button */}
+                             <div className="flex flex-col gap-2 items-center justify-center p-4 border-2 border-dashed border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group" onClick={() => fileInputRef.current?.click()}>
+                                 <input 
+                                    type="file" 
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    multiple
+                                    onChange={handleFileSelect}
+                                  />
+                                 <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center group-hover:bg-indigo-100 group-hover:scale-110 transition-all">
+                                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                 </div>
+                                 <span className="text-sm font-medium text-slate-600">Select Files</span>
+                            </div>
                         </div>
                     </div>
                  </div>
+            )}
+            
+            {/* Display Selected Files for Context */}
+            {scannedFiles.length > 0 && !report && (
+                <div className="max-w-4xl mx-auto mb-6 bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-2">
+                    <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                               <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                               Review Files ({scannedFiles.filter(f => f.selected).length}/{scannedFiles.length})
+                            </h3>
+                            <div className="flex gap-2 text-xs">
+                                <button onClick={() => toggleAllFiles(true)} className="text-blue-600 hover:text-blue-800 font-medium hover:underline">Select All</button>
+                                <span className="text-slate-300">|</span>
+                                <button onClick={() => toggleAllFiles(false)} className="text-slate-500 hover:text-slate-700 font-medium hover:underline">Deselect All</button>
+                            </div>
+                        </div>
+                        <button onClick={() => setScannedFiles([])} className="text-xs text-red-500 hover:text-red-700 hover:underline">Clear</button>
+                    </div>
+                    
+                    <div className="max-h-64 overflow-y-auto p-0 bg-white">
+                        <table className="w-full text-left text-xs">
+                            <tbody className="divide-y divide-slate-100">
+                                {scannedFiles.map((f, i) => (
+                                    <tr key={i} className={`hover:bg-slate-50 transition-colors cursor-pointer ${f.selected ? 'bg-blue-50/30' : ''}`} onClick={() => toggleFileSelection(i)}>
+                                        <td className="px-4 py-2 w-8">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={f.selected} 
+                                                onChange={() => {}} // Handled by tr click
+                                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                        </td>
+                                        <td className="px-2 py-2 font-mono text-slate-600 truncate max-w-xs">{f.path}</td>
+                                        <td className="px-4 py-2 text-right text-slate-400 font-mono">
+                                            {f.content.length} bytes
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="bg-slate-50 px-4 py-3 border-t border-slate-200 flex justify-end">
+                         <Button onClick={runLocalScan} disabled={scannedFiles.filter(f => f.selected).length === 0} isLoading={loading} className="w-full sm:w-auto">
+                            Start Interceptor Scan
+                         </Button>
+                    </div>
+                </div>
             )}
 
             {/* Dashboard */}
@@ -528,13 +677,6 @@ const App: React.FC = () => {
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
                             Git Repository
                         </button>
-                        <button 
-                            onClick={() => setInputMode('local')}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${inputMode === 'local' ? 'border-blue-500 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                        >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            Local Path
-                        </button>
                     </div>
                 )}
 
@@ -559,29 +701,6 @@ const App: React.FC = () => {
                               />
                               <Button onClick={() => handleLoadRepo(false)} isLoading={loading} className="bg-violet-600 hover:bg-violet-700">
                                   Load Repo
-                              </Button>
-                          </div>
-                      </div>
-                  ) : inputMode === 'local' && !fixReview ? (
-                      <div className="bg-white border border-slate-200 rounded-lg p-8 shadow-sm text-center space-y-4 animate-in fade-in zoom-in-95">
-                          <div className="mx-auto w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
-                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                          </div>
-                          <h3 className="text-lg font-bold text-slate-900">Scan Local Path</h3>
-                          <p className="text-slate-500 text-sm max-w-md mx-auto">
-                              Enter the absolute path to your local project directory. <br/>
-                              <span className="text-xs text-amber-600 bg-amber-50 px-1 py-0.5 rounded mt-1 inline-block">Requires backend running locally</span>
-                          </p>
-                          <div className="flex gap-2 max-w-lg mx-auto">
-                              <input 
-                                type="text" 
-                                placeholder="/Users/dev/projects/my-app" 
-                                className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                value={localPath}
-                                onChange={(e) => setLocalPath(e.target.value)}
-                              />
-                              <Button onClick={() => handleLoadLocal(false)} isLoading={loading} className="bg-blue-600 hover:bg-blue-700">
-                                  Load Files
                               </Button>
                           </div>
                       </div>
@@ -670,7 +789,7 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="flex gap-2">
-                        <Button variant="ghost" onClick={() => { setCode(''); setReport(null); setError(null); setPreviewIssue(null); setFixReview(null); setHighlightedText(null); setInputMode('manual'); }}>Clear</Button>
+                        <Button variant="ghost" onClick={() => { setCode(''); setReport(null); setError(null); setPreviewIssue(null); setFixReview(null); setHighlightedText(null); setInputMode('manual'); setScannedFiles([]); }}>Clear</Button>
                         
                         {!fixReview && inputMode === 'manual' && (
                             <Button onClick={() => handleAnalyze()} isLoading={loading} disabled={!code.trim()}>
